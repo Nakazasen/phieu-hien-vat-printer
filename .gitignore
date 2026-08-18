@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# PyInstaller
+build/
+dist/
+*.spec
+release_artifacts/
+release_clean/
+
+# Testing, static analysis, and tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.understand-anything/
+graphify-out/
+scratch/
+tmp/
+temp_excel/
+
+# Project-specific / User data
+po_registry.db
+po_registry.db-shm
+po_registry.db-wal
+output/
+test_output_*.pdf
+test_batch_output.pdf
+260*.pdf
+edi-*.pdf
+*.xlsx
+qr-contract-*.png
+
+# OS generated files
+.DS_Store
+Thumbs.db

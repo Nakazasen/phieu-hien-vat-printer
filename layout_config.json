@@ -1,0 +1,213 @@
+{
+  "font": {
+    "name": "Helvetica",
+    "size": 10
+  },
+  "qr_positions": {
+    "qr_122": {
+      "label": "QR 122 ký tự",
+      "x": 200,
+      "y": 150,
+      "width": 100,
+      "height": 100
+    },
+    "qr_full": {
+      "label": "QR đầy đủ",
+      "x": 710,
+      "y": 270,
+      "width": 100,
+      "height": 100
+    }
+  },
+  "text_positions": [
+    {
+      "id": "po_top",
+      "label": "PO trên trái",
+      "field": "po",
+      "x": 400,
+      "y": 180
+    },
+    {
+      "id": "po_detail_top",
+      "label": "PO chi tiết trên trái",
+      "field": "po_detail",
+      "x": 460,
+      "y": 180
+    },
+    {
+      "id": "po_sub_top",
+      "label": "PO phụ trên trái",
+      "field": "po_sub",
+      "x": 500,
+      "y": 180
+    },
+    {
+      "id": "item_code_left_1",
+      "label": "Mã hàng trái 1",
+      "field": "item_code",
+      "x": 20,
+      "y": 200
+    },
+    {
+      "id": "rev_left_1",
+      "label": "Rev trái 1",
+      "field": "rev",
+      "x": 100,
+      "y": 200
+    },
+    {
+      "id": "item_name_left_1",
+      "label": "Tên hàng trái 1",
+      "field": "item_name",
+      "x": 220,
+      "y": 200
+    },
+    {
+      "id": "qty_left_1",
+      "label": "SL trái 1",
+      "field": "qty",
+      "x": 50,
+      "y": 240
+    },
+    {
+      "id": "po_left_1",
+      "label": "PO trái 1",
+      "field": "po",
+      "x": 130,
+      "y": 240
+    },
+    {
+      "id": "po_detail_left_1",
+      "label": "PO chi tiết trái 1",
+      "field": "po_detail",
+      "x": 200,
+      "y": 240
+    },
+    {
+      "id": "lot_left_1",
+      "label": "Lot trái 1",
+      "field": "lot",
+      "x": 260,
+      "y": 240
+    },
+    {
+      "id": "item_code_right_1",
+      "label": "Mã hàng phải 1",
+      "field": "item_code",
+      "x": 600,
+      "y": 50
+    },
+    {
+      "id": "rev_right_1",
+      "label": "Rev phải 1",
+      "field": "rev",
+      "x": 670,
+      "y": 50
+    },
+    {
+      "id": "po_right_1",
+      "label": "PO phải 1",
+      "field": "po",
+      "x": 620,
+      "y": 70
+    },
+    {
+      "id": "po_detail_right_1",
+      "label": "PO chi tiết phải 1",
+      "field": "po_detail",
+      "x": 680,
+      "y": 70
+    },
+    {
+      "id": "po_sub_right_1",
+      "label": "PO phụ phải 1",
+      "field": "po_sub",
+      "x": 710,
+      "y": 70
+    },
+    {
+      "id": "box_right_1",
+      "label": "Box phải 1",
+      "field": "box",
+      "x": 780,
+      "y": 70
+    },
+    {
+      "id": "item_name_right_1",
+      "label": "Tên hàng phải 1",
+      "field": "item_name",
+      "x": 650,
+      "y": 85
+    },
+    {
+      "id": "qty_right_1",
+      "label": "SL phải 1",
+      "field": "carton_qty",
+      "x": 670,
+      "y": 100
+    },
+    {
+      "id": "qty_right_2",
+      "label": "SL phải 2",
+      "field": "total_qty",
+      "x": 750,
+      "y": 100
+    },
+    {
+      "id": "lot_right_1",
+      "label": "Lot phải 1",
+      "field": "lot",
+      "x": 610,
+      "y": 150
+    },
+    {
+      "id": "po_bottom",
+      "label": "PO dưới",
+      "field": "po",
+      "x": 380,
+      "y": 380
+    },
+    {
+      "id": "po_detail_bottom",
+      "label": "PO chi tiết dưới",
+      "field": "po_detail",
+      "x": 440,
+      "y": 380
+    },
+    {
+      "id": "po_sub_bottom",
+      "label": "PO phụ dưới",
+      "field": "po_sub",
+      "x": 480,
+      "y": 380
+    },
+    {
+      "id": "item_code_bottom",
+      "label": "Mã hàng dưới",
+      "field": "item_code",
+      "x": 30,
+      "y": 410
+    },
+    {
+      "id": "rev_bottom",
+      "label": "Rev dưới",
+      "field": "rev",
+      "x": 100,
+      "y": 410
+    },
+    {
+      "id": "item_name_bottom",
+      "label": "Tên hàng dưới",
+      "field": "item_name",
+      "x": 190,
+      "y": 410
+    },
+    {
+      "id": "qty_bottom",
+      "label": "SL dưới",
+      "field": "qty",
+      "x": 400,
+      "y": 410
+    }
+  ]
+}
