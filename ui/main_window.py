@@ -1,8 +1,10 @@
-import argparse
+from __future__ import annotations
+
 import os
+import queue
 import time
 from pathlib import Path
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 import customtkinter as ctk
 
@@ -241,8 +243,6 @@ class SlipPrinterApp(ctk.CTk):
         return self.data_tab.auto_commit_form()
 
     def _drain_event_queue(self) -> None:
-        import queue
-        from tkinter import messagebox
         while True:
             try:
                 event_type, payload = self.app_state.event_queue.get_nowait()
@@ -330,32 +330,3 @@ def _wait_for_process_exit(pid: int, timeout_seconds: float = 120.0) -> None:
             return
         time.sleep(0.2)
     raise TimeoutError(f"Tiến trình {pid} chưa thoát sau {timeout_seconds:.0f} giây.")
-
-
-def main(argv: list[str] | None = None) -> int:
-    import sys
-    try:
-        if sys.stdout and hasattr(sys.stdout, "reconfigure"):
-            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        if sys.stderr and hasattr(sys.stderr, "reconfigure"):
-            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
-        pass
-
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument("--health-check", action="store_true")
-    parser.add_argument("--wait-for-pid", type=int)
-    args, _unknown = parser.parse_known_args(argv)
-    
-    if args.health_check:
-        run_health_check()
-        return 0
-    if args.wait_for_pid is not None:
-        _wait_for_process_exit(args.wait_for_pid)
-        
-    app = SlipPrinterApp()
-    app.mainloop()
-    return 0
-
-if __name__ == "__main__":
-    raise SystemExit(main())

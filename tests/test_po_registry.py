@@ -20,8 +20,7 @@ def test_po_generation(temp_registry):
     assert po2.startswith("11")
     
     # Prefix is 11 + YY + MM + DD
-    from datetime import timezone
-    prefix = "11" + datetime.now(timezone.utc).strftime("%y%m%d")
+    prefix = "11" + datetime.now().strftime("%y%m%d")
     assert po1.startswith(prefix)
     
     # Suffix should increment

@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Sequence
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 AUTO_PO_PREFIX = "11"
 FIXED_PO_DETAIL = "00010"
@@ -98,8 +99,7 @@ class PORegistry:
             If NN would exceed 99 for the given date.
         """
         if target_date is None:
-            from datetime import datetime, timezone
-            target_date = datetime.now(timezone.utc).date()
+            target_date = datetime.now().date()
 
         date_key = target_date.strftime("%Y%m%d")
         yy = target_date.strftime("%y")
@@ -237,8 +237,7 @@ class PORegistry:
     def current_nn(self, target_date: date | None = None) -> int:
         """Return the current (next available) NN for *target_date*."""
         if target_date is None:
-            from datetime import datetime, timezone
-            target_date = datetime.now(timezone.utc).date()
+            target_date = datetime.now().date()
         date_key = target_date.strftime("%Y%m%d")
         row = self._conn.execute(
             "SELECT next_nn FROM po_sequence WHERE date_key = ?",
@@ -281,14 +280,13 @@ class PORegistry:
 
     def get_statistics(self) -> dict[str, Any]:
         """Return high-level statistics about registered POs."""
-        from datetime import datetime, timezone
         total = self.count_registered()
         today_row = self._conn.execute(
             "SELECT COUNT(*) FROM po_registry WHERE date(created_at) = date('now','localtime')"
         ).fetchone()
         today_count = today_row[0] if today_row else 0
         current_nn = self.current_nn()
-        today = datetime.now(timezone.utc).date()
+        today = datetime.now().date()
         next_po = f"{AUTO_PO_PREFIX}{today.strftime('%y%m%d')}{current_nn:02d}"
         return {
             "total_count": total,

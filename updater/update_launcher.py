@@ -74,7 +74,7 @@ def resolve_current_entrypoint(app_root: str | os.PathLike[str]) -> Path:
 def default_app_root() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent / "release_artifacts" / "install_bundle"
+    return Path(__file__).resolve().parent.parent / "release_artifacts" / "install_bundle"
 
 
 def main(argv: list[str] | None = None) -> int:

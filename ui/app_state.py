@@ -80,5 +80,4 @@ class AppState:
         return str(default_path) if default_path.exists() else ""
 
     def _default_output_name(self) -> str:
-        from datetime import timezone
-        return datetime.now(timezone.utc).strftime("%y%m%d_%H%M%S") + ".pdf"
+        return datetime.now().strftime("%y%m%d_%H%M%S") + ".pdf"

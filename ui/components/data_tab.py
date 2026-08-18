@@ -311,6 +311,7 @@ class DataTabPanel(ctk.CTkFrame):
             self.app_state.po_sub_var, self.app_state.box_var, self.app_state.rev_var, self.app_state.lot_var,
         ):
             variable.set("")
+        self.app_state.rev_var.set("01")
         self.app_state.form_mode_var.set("Đang tạo dòng mới")
 
     def set_qr_payload_text(self, payload: str) -> None:

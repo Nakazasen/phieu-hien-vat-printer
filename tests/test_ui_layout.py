@@ -72,6 +72,7 @@ def test_datatab_layout_and_responsive_height():
     # 6. Test clear form
     tab.clear_form()
     assert state.item_code_var.get() == ""
+    assert state.rev_var.get() == "01"
     assert state.form_mode_var.get() == "Đang tạo dòng mới"
 
     # 7. Test Add Record (Thêm mới) with Auto PO Generation

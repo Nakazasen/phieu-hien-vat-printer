@@ -144,7 +144,7 @@ def build_application() -> Path:
 def build_launcher() -> Path:
     icon = PROJECT_ROOT / "app_icon.ico"
     return _run_pyinstaller(
-        PROJECT_ROOT / "update_launcher.py", LAUNCHER_NAME, add_data=[], console=True, icon=icon
+        PROJECT_ROOT / "updater" / "update_launcher.py", LAUNCHER_NAME, add_data=[], console=True, icon=icon
     )
 
 

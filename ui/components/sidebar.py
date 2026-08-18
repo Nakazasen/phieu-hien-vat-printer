@@ -18,7 +18,7 @@ class SidebarPanel(ctk.CTkScrollableFrame):
         )
         ctk.CTkLabel(
             self,
-            text="Phát triển: Bùi Đức Vinh",
+            text="Phát triển: Bùi Đức Vinh · Phòng PTHT Chế tạo",
             font=ctk.CTkFont(size=13),
             text_color=("gray40", "gray60"),
         ).grid(row=1, column=0, sticky="w", padx=24, pady=(0, 4))
