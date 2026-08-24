@@ -33,9 +33,14 @@ def sha256_file(path: str | os.PathLike[str]) -> str:
 
 def safe_relative_path(raw_path: str) -> str:
     normalized = str(raw_path).replace("\\", "/")
+    if not normalized or normalized.startswith("./") or normalized.startswith("."):
+        raise ArtifactVerificationError(f"Đường dẫn package không hợp lệ: {raw_path}")
     pure = PurePosixPath(normalized)
-    if not normalized or pure.is_absolute() or ":" in pure.parts[0] or ".." in pure.parts:
+    if pure.is_absolute() or ":" in pure.parts[0] or ".." in pure.parts:
         raise ArtifactVerificationError(f"Đường dẫn package không an toàn: {raw_path}")
+    segments = normalized.split("/")
+    if any(seg in {"", "."} or seg.startswith(".") for seg in segments):
+        raise ArtifactVerificationError(f"Đường dẫn package không hợp lệ: {raw_path}")
     if any(part in {"", "."} or part.startswith(".") for part in pure.parts):
         raise ArtifactVerificationError(f"Đường dẫn package không hợp lệ: {raw_path}")
     return pure.as_posix()

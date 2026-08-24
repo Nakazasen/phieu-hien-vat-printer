@@ -193,7 +193,12 @@ class HistoryTabPanel(ctk.CTkFrame):
             total_exported = self.app_state.po_registry.export_history_to_csv(file_path, search=search_query)
             messagebox.showinfo(
                 APP_TITLE,
-                f"Đã xuất thành công {total_exported} bản ghi lịch sử ra file:\n{file_path}\n\nBạn có thể mở file này trực tiếp bằng Microsoft Excel.",
+                f"Đã xuất thành công {total_exported} bản ghi lịch sử ra file:\n{file_path}\n\n"
+                "👉 Bạn có thể mở file này trực tiếp bằng Microsoft Excel để tra cứu và lưu trữ.",
             )
         except Exception as exc:  # noqa: BLE001
-            messagebox.showerror(APP_TITLE, f"Lỗi khi xuất file:\n{exc}")
+            messagebox.showerror(
+                APP_TITLE,
+                f"Không thể xuất file lịch sử:\n{exc}\n\n"
+                "👉 Hướng dẫn: Vui lòng kiểm tra xem file CSV đích có đang bị mở bởi Excel không, hoặc chọn một thư mục lưu trữ khác có quyền ghi.",
+            )

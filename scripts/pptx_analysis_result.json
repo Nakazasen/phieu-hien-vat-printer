@@ -1,0 +1,52 @@
+{
+  "file1": {
+    "key": "file1",
+    "path": "\\\\10.170.162.32\\Data\\00_KDTVN Common(KDTVN共通)\\⑤Production Engineering(製造技術)\\◆Iris EXP◆\\Điều chỉnh\\Athenal\\Athena保証工程取り組み説明2025 VN.pptx",
+    "exists": true,
+    "file_size": 9303444,
+    "readable": true,
+    "slides_count": 17,
+    "slide_width": 9144000,
+    "slide_height": 5143500,
+    "slides": [],
+    "summary": {
+      "total_shapes": 0,
+      "text_boxes": 0,
+      "pictures": 0,
+      "tables": 0,
+      "groups": 0,
+      "graphic_frames": 0,
+      "total_embedded_images": 0,
+      "total_image_bytes": 0,
+      "notes_count": 0,
+      "vietnamese_text_detected": 0,
+      "japanese_text_detected": 0
+    },
+    "error": "Error parsing presentation: type object 'MSO_SHAPE_TYPE' has no attribute 'GRAPHIC_FRAME'\nTraceback (most recent call last):\n  File \"d:\\Sandbox\\PM_in_lai_phieuhienvat\\scripts\\inspect_pptx_target.py\", line 170, in analyze_pptx\n    s_data = inspect_shape(shape)\n  File \"d:\\Sandbox\\PM_in_lai_phieuhienvat\\scripts\\inspect_pptx_target.py\", line 92, in inspect_shape\n    if shape.shape_type == MSO_SHAPE_TYPE.GRAPHIC_FRAME:\n                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: type object 'MSO_SHAPE_TYPE' has no attribute 'GRAPHIC_FRAME'\n"
+  },
+  "file2": {
+    "key": "file2",
+    "path": "\\\\10.170.162.32\\Data\\00_KDTVN Common(KDTVN共通)\\⑤Production Engineering(製造技術)\\◆Iris EXP◆\\Điều chỉnh\\Athenal\\Athena保証工程　RaspberryPI問題点 VN.pptx",
+    "exists": true,
+    "file_size": 567205,
+    "readable": true,
+    "slides_count": 6,
+    "slide_width": 12192000,
+    "slide_height": 6858000,
+    "slides": [],
+    "summary": {
+      "total_shapes": 0,
+      "text_boxes": 0,
+      "pictures": 0,
+      "tables": 0,
+      "groups": 0,
+      "graphic_frames": 0,
+      "total_embedded_images": 0,
+      "total_image_bytes": 0,
+      "notes_count": 0,
+      "vietnamese_text_detected": 0,
+      "japanese_text_detected": 0
+    },
+    "error": "Error parsing presentation: type object 'MSO_SHAPE_TYPE' has no attribute 'GRAPHIC_FRAME'\nTraceback (most recent call last):\n  File \"d:\\Sandbox\\PM_in_lai_phieuhienvat\\scripts\\inspect_pptx_target.py\", line 170, in analyze_pptx\n    s_data = inspect_shape(shape)\n  File \"d:\\Sandbox\\PM_in_lai_phieuhienvat\\scripts\\inspect_pptx_target.py\", line 92, in inspect_shape\n    if shape.shape_type == MSO_SHAPE_TYPE.GRAPHIC_FRAME:\n                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAttributeError: type object 'MSO_SHAPE_TYPE' has no attribute 'GRAPHIC_FRAME'\n"
+  }
+}

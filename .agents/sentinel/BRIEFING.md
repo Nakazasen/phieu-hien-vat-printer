@@ -1,28 +1,26 @@
-# BRIEFING — 2026-08-18T05:32:25Z
+# BRIEFING — 2026-08-19T12:09:00Z
 
 ## Mission
-Review recent refactoring of PM_in_lai_phieuhienvat, verify imports/paths, identify tech debt, fix any broken imports, and verify pytest/health check.
+Coordinate and monitor project execution for Interactive Tutorial & User Guide implementation.
 
 ## 🔒 My Identity
 - Archetype: sentinel
-- Working directory: D:\Sandbox\PM_in_lai_phieuhienvat\.agents\sentinel
-- Orchestrator: 845d9bed-a3ee-4997-baf4-6db39a9ff9e1
-- Victory Auditor: 216d87cb-a6e8-4ce1-9f2c-daea541b0629
+- Working directory: d:\Sandbox\PM_in_lai_phieuhienvat\.agents\sentinel
+- Orchestrator: orchestrator_3 (ID: cc85c184-3d9f-483d-8142-cde146093bfe)
+- Victory Auditor: c0b76097-38c7-47a0-b91c-0bd072380b2a
 
 ## 🔒 Key Constraints
 - No technical decisions — relay only
 - Victory Audit is MANDATORY before reporting completion
-- Must not write code or make technical decisions
+- Context ultra-light: delegate all technical work and planning to orchestrator
 
 ## User Context
-- **Last user request**: Review refactoring, verify imports & paths, assess tech debt, fix issues, pass pytest and health-check.
+- **Last user request**: Add Interactive Tutorial (UI Overlay) and User Guide to Phieu Hien Vat Printer.
 - **Pending clarifications**: none
-- **Delivered results**: Refactoring verified, broken paths & typing imports fixed, test suite expanded (31 passing tests), --health-check verified, Victory Confirmed by independent auditor.
+- **Delivered results**: Interactive Tutorial Engine (UI Overlay), 4-step core business walkthrough, Header button, First-launch prompt & persistence, and 100% verified E2E test suite.
 
 ## Project Status
 - **Phase**: complete
-- **Route**: General (teamwork_preview_orchestrator)
-- **Rationale**: Multi-part SWE verification, technical debt assessment, automated fixes and testing.
 
 ## Victory Audit Status
 - **Triggered**: yes
@@ -30,6 +28,8 @@ Review recent refactoring of PM_in_lai_phieuhienvat, verify imports/paths, ident
 - **Retry count**: 0
 
 ## Artifact Index
-- D:\Sandbox\PM_in_lai_phieuhienvat\.agents\ORIGINAL_REQUEST.md — Authoritative record of user request
-- D:\Sandbox\PM_in_lai_phieuhienvat\.agents\sentinel\handoff.md — Sentinel final handoff report
-- D:\Sandbox\PM_in_lai_phieuhienvat\.agents\victory_auditor_1\handoff.md — Independent Victory Auditor report
+- d:\Sandbox\PM_in_lai_phieuhienvat\ORIGINAL_REQUEST.md — Authoritative user intent and acceptance criteria
+- d:\Sandbox\PM_in_lai_phieuhienvat\PROJECT.md — Master project blueprint
+- d:\Sandbox\PM_in_lai_phieuhienvat\TEST_INFRA.md — E2E test infrastructure
+- d:\Sandbox\PM_in_lai_phieuhienvat\.agents\orchestrator_3\handoff.md — Orchestrator final handoff report
+- d:\Sandbox\PM_in_lai_phieuhienvat\.agents\victory_auditor_sentinel\handoff.md — Victory Auditor verified report

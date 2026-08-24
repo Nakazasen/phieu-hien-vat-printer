@@ -1,7 +1,7 @@
 # Handover — In Phiếu Hiện Vật
 
-Ngày cập nhật: `2026-08-14` (Asia/Bangkok)  
-Trạng thái: ứng dụng in phiếu, đóng gói Inno Setup per-user và auto-update qua folder/LAN **đã được triển khai và smoke-test ngày 2026-08-14**. Chưa có nguồn update production được cấu hình/publish.
+Ngày cập nhật: `2026-08-24` (Asia/Bangkok)  
+Trạng thái: ứng dụng in phiếu, đóng gói Inno Setup per-user và auto-update qua folder/LAN **đã được hoàn thiện toàn diện, tích hợp Tutorial Overlay, Modal Quét QR 3 chế độ (Phân tách, Hoàn kho, Bóc tách), và bộ kiểm thử tự động pytest 546 items pass 100%**. Kho lưu trữ Git chính thức tại `https://github.com/Nakazasen/phieu-hien-vat-printer`.
 
 ## 1. Mục đích và phạm vi
 
@@ -23,7 +23,8 @@ Phần 7 giữ lại kế hoạch/acceptance gốc để truy vết; trạng th�
 - Build: `python package_app.py` (hoặc tương thích ngược: `python build_exe.py`, `build_exe.bat`).
 - PyInstaller dùng `--onedir`: app ở `dist\InPhieuHienVat`, launcher ở `dist\InPhieuHienVat_Launcher`.
 - Bundle cài đặt versioned: `release_artifacts\install_bundle`; installer: `release_artifacts\InPhieuHienVat_Setup_0.1.0.exe`.
-- Metadata chính thức: `release.json` (SemVer/channel/schema). Project vẫn **không phải Git repository** và chưa có test framework; smoke tests hiện được thực thi bằng command/script trực tiếp.
+- Metadata chính thức: `release.json` (SemVer/channel/schema). Project đã được quản lý bằng Git repository và bộ test suite toàn diện (`pytest`).
+
 
 ### 2.2 Runtime và dữ liệu bền vững hiện tại
 

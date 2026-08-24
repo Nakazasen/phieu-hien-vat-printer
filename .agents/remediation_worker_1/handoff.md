@@ -1,148 +1,46 @@
-# Handoff Report: Codebase Remediation Worker (remediation_worker_1)
-
-**Agent ID**: remediation_worker_1  
-**Milestone**: M1 - Codebase Remediation & Test Expansion  
-**Date**: 2026-08-18  
-
----
+# Handoff Report - Remediation Worker 1
 
 ## 1. Observation
-
-Direct code inspection and static analysis revealed the following issues and discrepancies in the refactored workspace:
-
-1. **Packaging Path Mismatch**:
-   - `package_app.py:147` referenced `PROJECT_ROOT / "update_launcher.py"`, whereas the file was moved to `PROJECT_ROOT / "updater" / "update_launcher.py"`.
-   - `updater/update_launcher.py:77` resolved `default_app_root()` in source mode using `Path(__file__).resolve().parent / "release_artifacts" / "install_bundle"` which evaluated to `updater/release_artifacts/...` instead of the project root's `release_artifacts/...`.
-
-2. **PO Registry Typing**:
-   - `core/po_registry.py:249` and line `282` used `Any` in type annotations (`list[dict[str, Any]]` and `dict[str, Any]`), but `Any` was missing from the module imports in `core/po_registry.py:20-24`.
-
-3. **Missing Pytest Configuration**:
-   - The workspace lacked a `pytest.ini` file, causing standalone invocations of `pytest` without pythonpath specification to potentially fail module discovery for root-relative imports.
-
-4. **Launcher Script Path in Batch File**:
-   - `run.bat` referenced `dist\InPhieuHienVat.exe`, whereas the PyInstaller build target in `package_app.py` outputs a onedir layout at `dist\InPhieuHienVat\InPhieuHienVat.exe`.
-
-5. **Date/Timezone Inconsistencies**:
-   - `core/po_registry.py` lines 102, 241, 291 used `datetime.now(timezone.utc).date()`, whereas SQLite database triggers and queries use `date('now','localtime')` and `WHERE date(created_at) = date('now','localtime')`.
-   - `ui/app_state.py:84` used `datetime.now(timezone.utc)` for default output PDF file naming instead of local system time.
-
-6. **UI Author & Specification Divergence**:
-   - `ui/components/sidebar.py:21` displayed `"Phát triển: Bùi Đức Vinh"`, missing the organizational unit `" · Phòng PTHT Chế tạo"`.
-   - `ui/components/data_tab.py:312` in `clear_form()` wiped all fields to empty string `""`, failing to reset `rev_var` back to default `"01"` as specified in `HANDOVER.md`.
-
-7. **Code Cleanliness & Redundant CLI**:
-   - `ui/main_window.py:244-245` performed inline `import queue` and `from tkinter import messagebox` inside the frequently called `_drain_event_queue()` loop.
-   - `ui/main_window.py:335-362` duplicated the CLI argument parsing and `if __name__ == "__main__":` entrypoint that already lives in `slip_printer_app.py`.
-
-8. **Missing Dependency Specification**:
-   - The workspace lacked `requirements.txt` listing the required production and development dependencies.
-
-9. **Test Suite Coverage Gaps**:
-   - `tests/` contained unit tests for `slip_printer_engine.py`, `po_registry.py`, and `ui/components`, but lacked tests for `updater/` (`update_security.py`, `update_delivery.py`) and `core/runtime_paths.py`.
-
----
+- **Codebase Analysis**:
+  - `core/slip_printer_engine.py:282`: The signature of `create_record` originally required `lot: object | None` without a default parameter value (`lot: object | None = None`), which caused `TypeError: create_record() missing 1 required keyword-only argument: 'lot'` whenever callers omitted the `lot` keyword argument.
+  - `tests/test_import_duplicate_check.py:478-482`: In `test_treeview_tag_configuration_and_duplicate_highlighting`, four calls to `create_record` in `state.records` omitted the `lot` parameter:
+    ```python
+    state.records = [
+        create_record(row_number=1, item_code="ITEM01", item_name="Part 1", carton_qty="10", total_qty="10", po="PO_DUP", po_detail="00010", po_sub="+001", box="001/001", rev="01"),
+        create_record(row_number=2, item_code="ITEM02", item_name="Part 2", carton_qty="10", total_qty="10", po="PO_CLEAN", po_detail="00010", po_sub="+001", box="001/001", rev="01"),
+        create_record(row_number=3, item_code="ITEM03", item_name="Part 3", carton_qty="10", total_qty="10", po="PO_BATCH_DUP", po_detail="00010", po_sub="+001", box="001/001", rev="01"),
+        create_record(row_number=4, item_code="ITEM04", item_name="Part 4", carton_qty="10", total_qty="10", po="PO_BATCH_DUP", po_detail="00010", po_sub="+001", box="001/001", rev="01"),
+    ]
+    ```
+  - `tests/test_engine.py`: Needed explicit coverage to test `create_record` behavior under all lot variations (omitted, None, empty string, non-empty lot string).
 
 ## 2. Logic Chain
-
-1. **Fixing Launcher & Packaging Paths**:
-   - Updated `package_app.py:147` to point to `PROJECT_ROOT / "updater" / "update_launcher.py"`.
-   - Updated `updater/update_launcher.py:77` to use `Path(__file__).resolve().parent.parent / "release_artifacts" / "install_bundle"`.
-   - *Result*: PyInstaller builds can find the launcher source script, and running the launcher from source resolves `release_artifacts` from project root.
-
-2. **Resolving Type Annotations**:
-   - Added `from typing import Any` and `from datetime import date, datetime` to top-level imports in `core/po_registry.py`.
-   - *Result*: Type hints on `fetch_history` and `get_statistics` evaluate cleanly without runtime `NameError`.
-
-3. **Establishing Standard Pytest Configuration**:
-   - Created `pytest.ini` with `pythonpath = .` and `testpaths = tests`.
-   - *Result*: Test discovery and execution succeed uniformly from any invocation context.
-
-4. **Correcting Execution Scripts**:
-   - Updated `run.bat` to test for and execute `%~dp0dist\InPhieuHienVat\InPhieuHienVat.exe`.
-   - *Result*: Launching via `run.bat` works correctly against the onedir packaged binary.
-
-5. **Harmonizing Date and Timezone Handling**:
-   - Updated `core/po_registry.py` (`generate_po`, `current_nn`, `get_statistics`) to use `datetime.now().date()`.
-   - Updated `ui/app_state.py` (`_default_output_name`) to use `datetime.now()`.
-   - Updated `tests/test_po_registry.py` date assertion to match local date prefix.
-   - *Result*: PO sequence numbers, today statistics, and generated filenames match local calendar dates and SQLite's `localtime` timestamps.
-
-6. **Aligning UI Labels and Form Reset Behavior**:
-   - Updated author subtitle in `ui/components/sidebar.py` to `"Phát triển: Bùi Đức Vinh · Phòng PTHT Chế tạo"`.
-   - In `ui/components/data_tab.py:clear_form()`, added `self.app_state.rev_var.set("01")`.
-   - Added assertion `assert state.rev_var.get() == "01"` to `tests/test_ui_layout.py`.
-   - *Result*: UI matches the author specification and reverts to Rev `"01"` upon clearing the form.
-
-7. **Improving Performance & Removing CLI Duplication**:
-   - Hoisted `queue` and `messagebox` to top-level module imports in `ui/main_window.py`.
-   - Removed inline imports inside `_drain_event_queue()`.
-   - Removed duplicate `main()` and `if __name__ == "__main__":` from `ui/main_window.py`, keeping helper utilities (`run_health_check`, `_wait_for_process_exit`) imported by `slip_printer_app.py`.
-   - *Result*: Reduced event loop overhead and established `slip_printer_app.py` as the sole canonical application entrypoint.
-
-8. **Declaring Dependencies**:
-   - Created `requirements.txt` containing `customtkinter`, `sv-ttk`, `Pillow`, `PyMuPDF`, `PyPDF2`, `qrcode`, `reportlab`, `openpyxl`, `pytest`, `pyinstaller`.
-   - *Result*: Environment setup and reproducibility are fully specified.
-
-9. **Expanding Test Suite**:
-   - Created `tests/test_updater.py` with 11 unit tests covering canonical JSON serialization, file SHA-256 calculation, path safety & directory traversal protection, manifest schema validation, package extraction integrity checks, semver parsing, update config load/save, LAN source discovery, and package fetching.
-   - Created `tests/test_runtime_paths.py` with 7 unit tests covering bundle and installation directory resolution, environment variable overrides for data and output paths, missing file copy guards, SQLite database backup migration, and runtime directory preparation.
-   - *Result*: 100% of core and updater modules are protected by automated tests.
-
----
+- **Remediation Implementation**:
+  1. Updated `core/slip_printer_engine.py` line 282: changed `lot: object | None,` to `lot: object | None = None,`.
+     - When `lot` is omitted by any caller, it defaults to `None`.
+     - `normalize_lot(None)` evaluates to `DEFAULT_LOT_TEXT` (`" "*10`), preserving full QR code format and 129-character payload standards.
+  2. Updated `tests/test_import_duplicate_check.py` lines 478-482: explicitly supplied `lot=""` to all four `create_record(...)` calls for strict conformance.
+  3. Added `test_create_record_default_lot()` to `tests/test_engine.py` to assert correct normalization for:
+     - Omitted `lot` argument.
+     - `lot=None`.
+     - `lot=""`.
+     - `lot="2026-08-19"`.
 
 ## 3. Caveats
-
-- **PyInstaller Binary Rebuild**: Packaging scripts (`package_app.py` and `build_exe.py`) were validated structurally, but a full PyInstaller binary generation was not executed in this turn to avoid long build times and disk mutation in the test sandbox.
-- **Tkinter Headless Execution**: GUI layout tests require a display environment or standard Tkinter initialization which is already mocked/headless-capable in `tests/test_ui_layout.py`.
-
----
+- No caveats. The modification maintains backwards compatibility and adheres strictly to the existing domain rules and type annotations.
 
 ## 4. Conclusion
-
-All 10 remediation tasks have been genuinely and completely implemented in the codebase:
-- Broken paths in packaging and launcher scripts are resolved.
-- Type annotations and timezone handling are unified.
-- UI details and form reset behavior conform to specifications.
-- Project configurations (`pytest.ini`, `requirements.txt`, `run.bat`) are fully established.
-- Code cleanliness and module architecture are streamlined.
-- Test coverage is substantially expanded with comprehensive unit tests for `updater` and `runtime_paths`.
-
----
+- All items in the remediation feedback from Reviewers and Challengers have been fully resolved:
+  - `core/slip_printer_engine.py:create_record` has `lot: object | None = None`.
+  - `tests/test_import_duplicate_check.py` explicitly supplies `lot=""`.
+  - Additional regression test `test_create_record_default_lot` is in place in `tests/test_engine.py`.
 
 ## 5. Verification Method
-
-To independently verify the changes:
-
-1. **Verify Type Annotations**:
-   ```bash
-   python -c "import typing; from core.po_registry import PORegistry; print(typing.get_type_hints(PORegistry.fetch_history))"
-   ```
-
-2. **Verify Application Health Check**:
-   ```bash
-   python slip_printer_app.py --health-check
-   ```
-   *Expected Output*: Exit code 0 with `Kiểm tra hệ thống thành công: ...\template.pdf`.
-
-3. **Verify Full Automated Test Suite**:
-   ```bash
-   pytest -v
-   ```
-   *Expected Result*: All tests pass in `tests/test_engine.py`, `tests/test_po_registry.py`, `tests/test_ui_layout.py`, `tests/test_updater.py`, and `tests/test_runtime_paths.py`.
-
-4. **Verify Files Created / Modified**:
-   - Inspect `package_app.py`
-   - Inspect `updater/update_launcher.py`
-   - Inspect `core/po_registry.py`
-   - Inspect `pytest.ini`
-   - Inspect `run.bat`
-   - Inspect `ui/app_state.py`
-   - Inspect `ui/components/sidebar.py`
-   - Inspect `ui/components/data_tab.py`
-   - Inspect `ui/main_window.py`
-   - Inspect `requirements.txt`
-   - Inspect `tests/test_po_registry.py`
-   - Inspect `tests/test_ui_layout.py`
-   - Inspect `tests/test_updater.py`
-   - Inspect `tests/test_runtime_paths.py`
+- **Verification Commands**:
+  - `pytest -v tests/test_import_duplicate_check.py`
+  - `pytest -v tests/test_engine.py`
+  - `pytest -v`
+- **Verification Inspection**:
+  - Inspect `core/slip_printer_engine.py:270-283` to confirm `lot: object | None = None`.
+  - Inspect `tests/test_import_duplicate_check.py:478-482` to confirm `lot=""` in all 4 calls.
+  - Inspect `tests/test_engine.py` to confirm `test_create_record_default_lot`.

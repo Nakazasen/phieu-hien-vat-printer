@@ -18,6 +18,8 @@ APP_FOLDER_NAME = "InPhieuHienVat"
 DATA_FOLDER_NAME = "InPhieuHienVatData"
 ENV_DATA_ROOT = "INPHIEUHIENVAT_DATA_DIR"
 ENV_OUTPUT_ROOT = "INPHIEUHIENVAT_OUTPUT_DIR"
+ENV_REGISTRY_PATH = "INPHIEUHIENVAT_REGISTRY_PATH"
+SHARED_REGISTRY_DIR = r"\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\db"
 
 
 @dataclass(frozen=True)
@@ -31,6 +33,10 @@ class RuntimePaths:
     template_path: Path
     layout_path: Path
     registry_path: Path
+
+
+AppPaths = RuntimePaths
+
 
 
 def bundle_dir() -> Path:
@@ -97,6 +103,31 @@ def _migrate_registry_if_needed(source: Path, destination: Path) -> None:
             legacy.close()
 
 
+def _resolve_registry_path(data_dir: Path) -> Path:
+    """Resolve PO registry path with env overrides and safe network share fallback.
+
+    Priority:
+    1. INPHIEUHIENVAT_REGISTRY_PATH environment variable (explicit file path).
+    2. INPHIEUHIENVAT_DATA_DIR environment variable (isolated test data dir).
+    3. Shared network directory (\\\\fstvn01\\Data\\...).
+    4. Local application data directory (fallback when network share is unreachable).
+    """
+    configured_file = os.environ.get(ENV_REGISTRY_PATH, "").strip()
+    if configured_file:
+        return Path(configured_file).expanduser().resolve()
+
+    configured_data_dir = os.environ.get(ENV_DATA_ROOT, "").strip()
+    if configured_data_dir:
+        return data_dir / "po_registry.db"
+
+    shared_dir = Path(SHARED_REGISTRY_DIR)
+    try:
+        shared_dir.mkdir(parents=True, exist_ok=True)
+        return shared_dir / "po_registry.db"
+    except (OSError, PermissionError):
+        return data_dir / "po_registry.db"
+
+
 def prepare_runtime_paths() -> RuntimePaths:
     """Create user-data locations and migrate legacy portable state once."""
     assets = bundle_dir()
@@ -114,7 +145,7 @@ def prepare_runtime_paths() -> RuntimePaths:
     _copy_if_missing(install / "layout_config.json", layout)
     _copy_if_missing(assets / "layout_config.json", layout)
 
-    registry = data / "po_registry.db"
+    registry = _resolve_registry_path(data)
     _migrate_registry_if_needed(install / "po_registry.db", registry)
 
     return RuntimePaths(

@@ -114,3 +114,27 @@ def test_prepare_runtime_paths_missing_template(tmp_path: Path, monkeypatch: pyt
 
     with pytest.raises(FileNotFoundError, match="Không tìm thấy template.pdf"):
         prepare_runtime_paths()
+
+
+def test_resolve_registry_path_priorities(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Requirement R1: Verify priority order of registry path resolution."""
+    from core.runtime_paths import ENV_REGISTRY_PATH, _resolve_registry_path
+
+    data_dir = tmp_path / "local_data"
+    data_dir.mkdir()
+
+    # 1. Explicit registry file override
+    explicit_file = tmp_path / "explicit_reg.db"
+    monkeypatch.setenv(ENV_REGISTRY_PATH, str(explicit_file))
+    assert _resolve_registry_path(data_dir) == explicit_file.resolve()
+
+    # 2. Test data dir override
+    monkeypatch.delenv(ENV_REGISTRY_PATH)
+    monkeypatch.setenv(ENV_DATA_ROOT, str(data_dir))
+    assert _resolve_registry_path(data_dir) == data_dir / "po_registry.db"
+
+    # 3. Unreachable shared network fallback to local app data
+    monkeypatch.delenv(ENV_DATA_ROOT)
+    monkeypatch.setattr("core.runtime_paths.SHARED_REGISTRY_DIR", r"\\unreachable_host_999\share\dir")
+    resolved = _resolve_registry_path(data_dir)
+    assert resolved == data_dir / "po_registry.db"

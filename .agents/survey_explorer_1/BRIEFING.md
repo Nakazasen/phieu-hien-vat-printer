@@ -1,45 +1,55 @@
-# BRIEFING — 2026-08-18T05:15:45Z
+# BRIEFING — 2026-08-19T08:04:30Z
 
 ## Mission
-Comprehensive inspection of all Python module imports, package structure, dynamic imports, and file path references across the PM_in_lai_phieuhienvat workspace.
+Deeply investigate reference project D:\Sandbox\MP2027 for packaging, Inno Setup scripts, build automation, and Auto-Update engine architecture.
 
 ## 🔒 My Identity
-- Archetype: Teamwork explorer
-- Roles: Import & Path Inspector
-- Working directory: D:\Sandbox\PM_in_lai_phieuhienvat\.agents\survey_explorer_1
-- Original parent: 845d9bed-a3ee-4997-baf4-6db39a9ff9e1
-- Milestone: Survey & Inspection Complete
+- Archetype: explorer
+- Roles: investigator, analyzer, synthesizer
+- Working directory: d:\Sandbox\PM_in_lai_phieuhienvat\.agents\survey_explorer_1
+- Original parent: 496a12d8-5a64-4409-b089-6abdc4ab595d
+- Milestone: Reference Project Deep Survey (MP2027)
 
 ## 🔒 Key Constraints
-- Read-only investigation — do NOT implement / modify source code directly
-- Perform exhaustive inspection of imports and resource paths
-- Document exact file lines, before/after recommendations in handoff.md
+- Read-only investigation — do NOT implement or modify code in D:\Sandbox\MP2027 or target project.
+- Write only to d:\Sandbox\PM_in_lai_phieuhienvat\.agents\survey_explorer_1\.
+- Produce detailed handoff.md with 5 sections (Observation, Logic Chain, Caveats, Conclusion, Verification Method).
+- Send completion message to parent via send_message.
 
 ## Current Parent
-- Conversation ID: 845d9bed-a3ee-4997-baf4-6db39a9ff9e1
-- Updated: 2026-08-18T05:15:45Z
+- Conversation ID: 496a12d8-5a64-4409-b089-6abdc4ab595d
+- Updated: 2026-08-19T08:04:30Z
 
 ## Investigation State
 - **Explored paths**:
-  - `slip_printer_app.py`, `package_app.py`, `build_exe.py`, `build_exe.bat`, `run.bat`, `InPhieuHienVat.spec`, `installer/InPhieuHienVat.iss`
-  - `core/` (`runtime_paths.py`, `po_registry.py`, `slip_printer_engine.py`, `__init__.py`)
-  - `ui/` (`app_state.py`, `app_controller.py`, `main_window.py`, `__init__.py`)
-  - `ui/components/` (`sidebar.py`, `data_tab.py`, `history_tab.py`, `layout_tab.py`, `__init__.py`)
-  - `updater/` (`app_updates.py`, `update_delivery.py`, `update_launcher.py`, `update_security.py`, `__init__.py`)
-  - `tests/` (`test_engine.py`, `test_po_registry.py`, `test_ui_layout.py`)
-  - Config/assets (`release.json`, `update_sources.default.json`, `layout_config.json`, `template.pdf`, `app_icon.ico`)
+  - `D:\Sandbox\MP2027\docs\handover\HANDOVER_FOR_NEXT_AGENT.md`
+  - `D:\Sandbox\MP2027\docs\handover\release_update_playbook.md`
+  - `D:\Sandbox\MP2027\docs\handover\code_walkthrough.md`
+  - `D:\Sandbox\MP2027\docs\handover\test_strategy_and_profiles.md`
+  - `D:\Sandbox\MP2027\docs\architecture\system_architecture.md`
+  - `D:\Sandbox\MP2027\installer\MP2027_Manager.iss`
+  - `D:\Sandbox\MP2027\installer\languages\Vietnamese.isl`
+  - `D:\Sandbox\MP2027\scripts\package_app.py`
+  - `D:\Sandbox\MP2027\scripts\update_launcher.py`
+  - `D:\Sandbox\MP2027\MP2027_Portable.spec`
+  - `D:\Sandbox\MP2027\MP2027_Manager.spec`
+  - `D:\Sandbox\MP2027\packaging\mp2027_portable_entry.py`
+  - `D:\Sandbox\MP2027\src\services\app_updates.py`
+  - `D:\Sandbox\MP2027\src\services\update_delivery.py`
+  - `D:\Sandbox\MP2027\src\services\update_security.py`
+  - `D:\Sandbox\MP2027\src\universal_app.py`
+  - `D:\Sandbox\MP2027\tests\test_app_updates.py`
+  - `D:\Sandbox\MP2027\tests\test_update_delivery.py`
+  - `D:\Sandbox\MP2027\tests\test_update_security.py`
 - **Key findings**:
-  1. `package_app.py:147` contains broken path `PROJECT_ROOT / "update_launcher.py"` (should be `PROJECT_ROOT / "updater" / "update_launcher.py"`).
-  2. `updater/update_launcher.py:77` contains fragile relative path `Path(__file__).resolve().parent` resolving to `updater/release_artifacts` instead of `parent.parent`.
-  3. `core/po_registry.py:24` missing `from typing import Any` while using `Any` in type annotations.
-  4. `run.bat:5` checks legacy path `dist\InPhieuHienVat.exe` instead of onedir path.
-  5. `InPhieuHienVat.spec` is legacy one-file spec with hardcoded paths.
-- **Unexplored areas**: None, all 26 workspace modules/files fully surveyed.
+  - Fully mapped HASH_ONLY_LAN architecture, Inno Setup 6 configuration, PyInstaller onedir + thin launcher bundling, and 3-tier Auto-Update engine (delivery, security, staging/activation/rollback/restart).
+- **Unexplored areas**: None (all survey objectives complete).
 
 ## Key Decisions Made
-- Generated 5-component handoff report detailing exact observations, root cause logic, caveats, and before/after code fix snippets.
+- Handed off comprehensive analysis report in `handoff.md`.
 
 ## Artifact Index
-- `D:\Sandbox\PM_in_lai_phieuhienvat\.agents\survey_explorer_1\handoff.md` — Final structured handoff report
-- `D:\Sandbox\PM_in_lai_phieuhienvat\.agents\survey_explorer_1\progress.md` — Progress log
-- `D:\Sandbox\PM_in_lai_phieuhienvat\.agents\survey_explorer_1\DISPATCH.md` — Original task dispatch
+- DISPATCH.md — Initial dispatch log
+- BRIEFING.md — Persistent working memory
+- progress.md — Liveness heartbeat
+- handoff.md — Final 5-component handoff report

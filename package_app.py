@@ -70,6 +70,16 @@ def _inventory(root: Path) -> list[dict[str, object]]:
     return files
 
 
+def _remove_disallowed_bundle_files(root: Path) -> None:
+    """Remove metadata files whose paths are rejected by the secure updater."""
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(root)
+        if any(part.startswith(".") for part in relative.parts):
+            path.unlink()
+
+
 def _validate_app_dist(root: Path) -> None:
     # PyInstaller --onedir keeps application resources under _internal while
     # the executable stays at the bundle root.  Keep this validation aligned
@@ -137,15 +147,18 @@ def build_application() -> Path:
     root = _run_pyinstaller(
         PROJECT_ROOT / "slip_printer_app.py", APP_NAME, add_data=assets, console=False, icon=icon
     )
+    _remove_disallowed_bundle_files(root)
     _validate_app_dist(root)
     return root
 
 
 def build_launcher() -> Path:
     icon = PROJECT_ROOT / "app_icon.ico"
-    return _run_pyinstaller(
+    root = _run_pyinstaller(
         PROJECT_ROOT / "updater" / "update_launcher.py", LAUNCHER_NAME, add_data=[], console=True, icon=icon
     )
+    _remove_disallowed_bundle_files(root)
+    return root
 
 
 def _smoke_health(executable: Path, *, app_root: Path | None = None) -> None:
@@ -202,7 +215,40 @@ def assemble_install_bundle(app_dist: Path, launcher_dist: Path) -> Path:
     return INSTALL_BUNDLE
 
 
-def package() -> Path:
+def find_iscc() -> Path | None:
+    found = shutil.which("ISCC") or shutil.which("iscc")
+    if found:
+        return Path(found)
+    candidates = [
+        Path(os.path.expandvars(r"%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe")),
+        Path(os.path.expandvars(r"%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe")),
+        Path(os.path.expandvars(r"%ProgramFiles%\Inno Setup 6\ISCC.exe")),
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def compile_installer(iss_path: Path | None = None) -> Path | None:
+    target_iss = iss_path or (PROJECT_ROOT / "installer" / "InPhieuHienVat.iss")
+    if not target_iss.is_file():
+        raise FileNotFoundError(f"Không tìm thấy file Inno Setup script: {target_iss}")
+    iscc = find_iscc()
+    if iscc is None:
+        print("Inno Setup compiler (ISCC.exe) không tìm thấy trên máy tính; bỏ qua bước tạo file Setup.exe.")
+        return None
+    print(f"Đang biên dịch installer với {iscc}...")
+    subprocess.run([str(iscc), str(target_iss)], check=True, cwd=str(PROJECT_ROOT))
+    release = _release()
+    setup_exe = RELEASE_ARTIFACTS / f"InPhieuHienVat_Setup_{release['version']}.exe"
+    if setup_exe.is_file():
+        print(f"Đã tạo thành công bộ cài đặt: {setup_exe}")
+        return setup_exe
+    return None
+
+
+def package(*, compile_iss: bool = True) -> Path:
     release = _release()
     _validate_inno_version(str(release["version"]))
     app_dist = build_application()
@@ -211,6 +257,8 @@ def package() -> Path:
     bundle = assemble_install_bundle(app_dist, launcher_dist)
     _smoke_health(bundle / f"{LAUNCHER_NAME}.exe", app_root=bundle)
     print(f"Đã tạo gói cài đặt: {bundle}")
+    if compile_iss:
+        compile_installer()
     return bundle
 
 
@@ -284,13 +332,18 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-app-version")
     parser.add_argument("--publish-dir")
     parser.add_argument("--release-notes", default="")
+    parser.add_argument("--compile-installer", action="store_true", help="Chỉ chạy bước biên dịch Inno Setup (.iss)")
+    parser.add_argument("--no-installer", action="store_true", help="Bỏ qua bước gọi Inno Setup khi đóng gói")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
+    if args.compile_installer:
+        compile_installer()
+        return 0
     if not args.build_update:
-        package()
+        package(compile_iss=not args.no_installer)
         return 0
     if not args.min_app_version:
         raise SystemExit("Thiếu --min-app-version khi tạo update")
@@ -307,3 +360,4 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

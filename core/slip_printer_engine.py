@@ -166,6 +166,77 @@ def normalize_lot(value: object | None) -> str:
     return str(value)
 
 
+def normalize_box(box_value: object) -> str:
+    """Normalize a box value into 7-character XXX/YYY standard format.
+
+    Examples:
+    - "1" or 1 -> "001/001"
+    - "3" or 3 -> "001/003"
+    - "001/003" -> "001/003"
+    - "2/3" -> "002/003"
+    """
+    text = _string_value(box_value).strip()
+    if not text:
+        return ""
+    if "/" in text:
+        parts = text.split("/", 1)
+        try:
+            curr = int(parts[0].strip())
+            total = int(parts[1].strip())
+            return f"{curr:03d}/{total:03d}"
+        except ValueError:
+            return text
+    try:
+        n = int(text)
+        if n <= 0:
+            return text
+        if n == 1:
+            return "001/001"
+        return f"001/{n:03d}"
+    except ValueError:
+        return text
+
+
+def expand_box_sequence(box_value: object) -> list[str]:
+    """Expand a box count integer or formatted string into a list of box strings.
+
+    Examples:
+    - 3 or "3" or "003" -> ["001/003", "002/003", "003/003"]
+    - 1 or "1" -> ["001/001"]
+    - "001/003" -> ["001/003"]
+    - "002/003" -> ["002/003"]
+    - "2/5" -> ["002/005"]
+    """
+    text = _string_value(box_value).strip()
+    if not text:
+        raise ValueError("Số box không được để trống.")
+
+    if "/" in text:
+        parts = text.split("/", 1)
+        try:
+            curr = int(parts[0].strip())
+            total = int(parts[1].strip())
+            if curr <= 0 or total <= 0:
+                raise ValueError("Số box phải lớn hơn 0.")
+            if curr > total:
+                raise ValueError(f"Số thứ tự box ({curr}) không được lớn hơn tổng số box ({total}).")
+            return [f"{curr:03d}/{total:03d}"]
+        except ValueError as exc:
+            if "không được lớn hơn" in str(exc) or "phải lớn hơn 0" in str(exc):
+                raise
+            raise ValueError("Số box theo dạng 001/003 phải chứa các số hợp lệ.") from exc
+
+    try:
+        n = int(text)
+    except ValueError as exc:
+        raise ValueError("Số box phải là số nguyên dương (ví dụ: 3) hoặc theo dạng 001/003.") from exc
+
+    if n <= 0:
+        raise ValueError("Số box phải lớn hơn 0.")
+
+    return [f"{i:03d}/{n:03d}" for i in range(1, n + 1)]
+
+
 def calculate_total_qty(carton_qty: object, box: object) -> str:
     """Calculate total quantity from carton quantity and the final Box segment.
 
@@ -208,10 +279,11 @@ def create_record(
     po_sub: object,
     box: object,
     rev: object,
-    lot: object | None,
+    lot: object | None = None,
 ) -> SlipRecord:
     carton_qty_text = _string_value(carton_qty)
-    total_qty_text = calculate_total_qty(carton_qty_text, box)
+    normalized_box = normalize_box(box)
+    total_qty_text = calculate_total_qty(carton_qty_text, normalized_box)
     record = SlipRecord(
         row_number=row_number,
         item_code=_string_value(item_code),
@@ -221,7 +293,7 @@ def create_record(
         po=_string_value(po),
         po_detail=_string_value(po_detail),
         po_sub=_string_value(po_sub),
-        box=_string_value(box),
+        box=normalized_box,
         rev=_string_value(rev),
         lot=normalize_lot(lot),
     )
@@ -334,26 +406,147 @@ def format_string_qty(value: object) -> str:
 
 
 def format_string_part(item_code: object, rev_value: object) -> str:
-    combined_string = f"{item_code} {rev_value}" + (" " * 25)
-    return combined_string[:25]
+    combined_string = f"{_string_value(item_code).strip()} {_string_value(rev_value).strip()}"
+    return f"{combined_string:<25}"[:25]
 
 
 def format_string_lot(lot_value: object) -> str:
-    # The source printer reserves 26 fixed characters for Production Lot.
-    # Keeping this width also preserves the required 122-character QR prefix.
-    combined_string = f"{lot_value}" + (" " * 26)
-    return combined_string[:26]
+    combined_string = _string_value(lot_value)
+    return f"{combined_string:<26}"[:26]
+
+
+def format_string_po(po: object, po_detail: object, po_sub: object) -> str:
+    po_str = _string_value(po).strip()
+    detail_str = _string_value(po_detail).strip()
+    sub_str = _string_value(po_sub).strip()
+    return f"{po_str:<10}"[:10] + f"{detail_str:<5}"[:5] + f"{sub_str:<4}"[:4]
+
+
+def format_string_box(box_value: object) -> str:
+    norm = normalize_box(box_value)
+    return f"{norm:>7}"[:7]
 
 
 def build_qr_payload(record: SlipRecord) -> str:
+    """Build standardized 129-character QR payload for Kyocera EDI label.
+
+    Structure (129 chars total):
+    - 19 chars: PO (10) + PO detail (5) + PO sub (4)
+    - 4 chars: Space (4)
+    - 12 chars: Total Qty (8 digits + 0000)
+    - 25 chars: Item code & Rev (padded to 25)
+    - 12 chars: Total Qty repeated (8 digits + 0000)
+    - 26 chars: Lot (padded to 26)
+    - 24 chars: Space (24)
+    - 7 chars: Box (001/003)
+    Prefix: 122 chars. Total: 129 chars.
+    """
+    po_field = format_string_po(record.po, record.po_detail, record.po_sub)
+    space_4 = " " * 4
     formatted_total_qty = format_string_qty(record.total_qty)
-    formatted_carton_qty = format_string_qty(record.carton_qty)
     formatted_part = format_string_part(record.item_code, record.rev)
     formatted_lot = format_string_lot(record.lot)
+    space_24 = " " * 24
+    formatted_box = format_string_box(record.box)
+
     return (
-        f"{record.po}{record.po_detail}{record.po_sub}"
-        f"    {formatted_total_qty}{formatted_part}{formatted_carton_qty}{formatted_lot}"
-        f"                        {record.box}"
+        f"{po_field}{space_4}{formatted_total_qty}{formatted_part}"
+        f"{formatted_total_qty}{formatted_lot}{space_24}{formatted_box}"
+    )
+
+
+@dataclass(slots=True)
+class QRParsedData:
+    po: str
+    po_detail: str
+    po_sub: str
+    total_qty: str
+    item_code: str
+    rev: str
+    lot: str
+    box: str
+    carton_qty: str
+    raw_payload: str
+
+
+def parse_qr_payload(payload: str) -> QRParsedData:
+    """Parse and extract structured fields from a 122+ or 129-char QR code payload."""
+    clean_payload = payload.strip("\r\n")
+    if len(clean_payload) < 122:
+        raise ValueError(
+            f"Mã QR không đúng định dạng (độ dài {len(clean_payload)} < 122 ký tự tiêu chuẩn)."
+        )
+
+    po = clean_payload[0:10].strip()
+    po_detail = clean_payload[10:15].strip() or FIXED_PO_DETAIL
+    po_sub = clean_payload[15:19].strip() or FIXED_PO_SUB
+
+    # Total quantity at 23..35 (12 chars: 8 digits + 0000)
+    qty_segment = clean_payload[23:35].strip()
+    try:
+        if len(qty_segment) >= 8:
+            val = int(qty_segment[:8])
+        else:
+            val = int(qty_segment)
+        total_qty = str(val) if val > 0 else "1"
+    except ValueError:
+        total_qty = "1"
+
+    # Item code and Rev at 35..60 (25 chars)
+    part_rev_str = clean_payload[35:60].strip()
+    if " " in part_rev_str:
+        item_code, rev = part_rev_str.rsplit(" ", 1)
+        item_code = item_code.strip()
+        rev = rev.strip()
+    else:
+        item_code = part_rev_str
+        rev = "01"
+
+    if not (len(rev) == 2 and rev.isdigit() and int(rev) > 0):
+        rev = "01"
+
+    # Lot at 72..98 (26 chars)
+    lot_segment = clean_payload[72:98].strip()
+    lot = lot_segment if lot_segment else ""
+
+    # Box at 122.. (remaining chars, e.g. 7 chars)
+    box_segment = clean_payload[122:].strip()
+    if not box_segment:
+        box = "001/001"
+    else:
+        norm = normalize_box(box_segment)
+        try:
+            expand_box_sequence(norm)
+            box = norm
+        except Exception:
+            box = "001/001"
+
+    # Calculate carton_qty
+    try:
+        if "/" in box:
+            multiplier = int(box.rsplit("/", 1)[-1])
+            total_val = Decimal(total_qty)
+            carton_val = total_val / Decimal(multiplier)
+            if carton_val == carton_val.to_integral_value():
+                carton_qty = str(int(carton_val))
+            else:
+                carton_qty = format(carton_val.normalize(), "f").rstrip("0").rstrip(".")
+        else:
+            carton_qty = total_qty
+    except Exception:
+        carton_qty = total_qty
+
+    return QRParsedData(
+        po=po,
+        po_detail=po_detail,
+        po_sub=po_sub,
+        total_qty=total_qty,
+        item_code=item_code,
+        rev=rev,
+        lot=lot,
+        box=box,
+        carton_qty=carton_qty,
+        raw_payload=clean_payload,
     )
 
 
@@ -524,8 +717,20 @@ def validate_records(
             revision = validate_revision(record.rev)
         except ValueError as exc:
             raise ValueError(f"Dòng {index}: {exc}") from exc
-        calculated_total_qty = calculate_total_qty(record.carton_qty, record.box)
-        validated.append(replace(record, rev=revision, total_qty=calculated_total_qty).with_payload())
+        norm_box = normalize_box(record.box)
+        calculated_total_qty = calculate_total_qty(record.carton_qty, norm_box)
+        norm_detail = record.po_detail.strip() or FIXED_PO_DETAIL
+        norm_sub = record.po_sub.strip() or FIXED_PO_SUB
+        validated.append(
+            replace(
+                record,
+                po_detail=norm_detail,
+                po_sub=norm_sub,
+                box=norm_box,
+                rev=revision,
+                total_qty=calculated_total_qty,
+            ).with_payload()
+        )
 
     if registry is not None:
         combos = [
@@ -548,22 +753,74 @@ def auto_fill_po(
     Records that already have a non-empty PO are returned unchanged.
     Records with an empty PO get an auto-generated PO, fixed PO detail
     (``00010``), and fixed PO sub (``+001``).
+    Multi-box batches with empty PO sharing the same series use the same PO.
 
     Returns a new list with updated records.
     """
     result: list[SlipRecord] = []
-    for record in records:
+    i = 0
+    while i < len(records):
+        record = records[i]
         if record.po.strip():
             result.append(record)
-        else:
-            new_po = registry.generate_po()
-            updated = replace(
-                record,
-                po=new_po,
-                po_detail=FIXED_PO_DETAIL,
-                po_sub=FIXED_PO_SUB,
-            )
-            result.append(updated.with_payload())
+            i += 1
+            continue
+
+        new_po = registry.generate_po()
+        box_str = record.box.strip()
+        is_box_series = False
+        total_boxes = 1
+        if "/" in box_str:
+            parts = box_str.split("/", 1)
+            try:
+                curr_box = int(parts[0])
+                total_boxes = int(parts[1])
+                if curr_box == 1 and total_boxes > 1:
+                    is_box_series = True
+            except ValueError:
+                pass
+
+        updated = replace(
+            record,
+            po=new_po,
+            po_detail=record.po_detail.strip() or FIXED_PO_DETAIL,
+            po_sub=record.po_sub.strip() or FIXED_PO_SUB,
+        )
+        result.append(updated.with_payload())
+        i += 1
+
+        if is_box_series:
+            expected_next = 2
+            while i < len(records) and expected_next <= total_boxes:
+                next_record = records[i]
+                if next_record.po.strip():
+                    break
+                next_box = next_record.box.strip()
+                if "/" not in next_box:
+                    break
+                next_parts = next_box.split("/", 1)
+                try:
+                    next_curr = int(next_parts[0])
+                    next_tot = int(next_parts[1])
+                    if (
+                        next_curr == expected_next
+                        and next_tot == total_boxes
+                        and next_record.item_code.strip() == record.item_code.strip()
+                    ):
+                        next_updated = replace(
+                            next_record,
+                            po=new_po,
+                            po_detail=next_record.po_detail.strip() or FIXED_PO_DETAIL,
+                            po_sub=next_record.po_sub.strip() or FIXED_PO_SUB,
+                        )
+                        result.append(next_updated.with_payload())
+                        expected_next += 1
+                        i += 1
+                    else:
+                        break
+                except ValueError:
+                    break
+
     return result
 
 

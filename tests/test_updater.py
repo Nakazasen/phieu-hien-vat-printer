@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import tempfile
 import zipfile
@@ -368,3 +369,188 @@ def test_discover_and_fetch_update(mock_runtime_paths: RuntimePaths, tmp_path: P
     assert downloaded.is_file()
     assert downloaded.stat().st_size == len(package_content)
     assert sha256_file(downloaded) == digest
+
+
+# ======================================================================
+# Tests for updater.app_updates and update_launcher
+# ======================================================================
+
+from updater.app_updates import (
+    ApplicationUpdateError,
+    activate_staged_update,
+    application_install_root,
+    backup_runtime_state,
+    inspect_update_package,
+    install_update,
+    rollback_update,
+    stage_update,
+)
+from updater.update_launcher import (
+    LauncherStateError,
+    _safe_entrypoint,
+    resolve_current_entrypoint,
+)
+
+
+def test_application_install_root():
+    root = Path("C:/Users/test/AppData/Local/InPhieuHienVat")
+    app_dir = root / "apps" / "0.1.1"
+    assert application_install_root(app_dir) == root
+
+    with pytest.raises(ApplicationUpdateError):
+        application_install_root(root / "other_folder" / "0.1.1")
+
+    with pytest.raises(ApplicationUpdateError):
+        application_install_root(root / "apps" / "invalid_ver")
+
+
+def _create_mock_update_package(output_path: Path, *, version: str, min_app_version: str = "0.1.0") -> Path:
+    entrypoint_content = b"executable mock"
+    manifest = {
+        "schema": 1,
+        "kind": "application",
+        "id": "InPhieuHienVat",
+        "version": version,
+        "min_app_version": min_app_version,
+        "entrypoint": "InPhieuHienVat.exe",
+        "files": [
+            {
+                "path": "InPhieuHienVat.exe",
+                "sha256": hashlib.sha256(entrypoint_content).hexdigest(),
+                "size": len(entrypoint_content),
+            }
+        ],
+    }
+    with zipfile.ZipFile(output_path, "w") as zf:
+        zf.writestr("manifest.json", canonical_json_bytes(manifest))
+        zf.writestr("InPhieuHienVat.exe", entrypoint_content)
+    return output_path
+
+
+def test_inspect_and_stage_update(tmp_path: Path):
+    app_root = tmp_path / "InPhieuHienVat"
+    app_root.mkdir()
+    (app_root / "apps" / "0.1.0").mkdir(parents=True)
+
+    pkg = _create_mock_update_package(tmp_path / "InPhieuHienVat-0.1.1.phieuupdate", version="0.1.1")
+    manifest = inspect_update_package(pkg, current_version="0.1.0")
+    assert manifest["version"] == "0.1.1"
+
+    # Stage update
+    staged_dir = stage_update(pkg, app_root, current_version="0.1.0")
+    assert staged_dir == app_root / "apps" / "0.1.1"
+    assert (staged_dir / "InPhieuHienVat.exe").is_file()
+    assert (staged_dir / "manifest.json").is_file()
+
+    # Staging again with existing version should fail
+    with pytest.raises(ApplicationUpdateError):
+        stage_update(pkg, app_root, current_version="0.1.0")
+
+
+def test_backup_runtime_state(mock_runtime_paths: RuntimePaths, tmp_path: Path):
+    import sqlite3
+
+    # Populate registry database with real SQLite tables
+    conn = sqlite3.connect(mock_runtime_paths.registry_path)
+    conn.execute("CREATE TABLE test (id INTEGER PRIMARY KEY, code TEXT)")
+    conn.execute("INSERT INTO test (code) VALUES ('SAMPLE-001')")
+    conn.commit()
+    conn.close()
+
+    backup_root = tmp_path / "backups"
+    dest = backup_runtime_state(mock_runtime_paths, backup_root, target_version="0.1.2")
+    assert dest.is_dir()
+    assert (dest / "po_registry.db").is_file()
+    assert (dest / "layout_config.json").is_file()
+    assert (dest / "backup.json").is_file()
+
+    # Verify backup DB content matches
+    b_conn = sqlite3.connect(dest / "po_registry.db")
+    cur = b_conn.cursor()
+    cur.execute("SELECT code FROM test")
+    rows = cur.fetchall()
+    assert rows == [("SAMPLE-001",)]
+    b_conn.close()
+
+
+def test_rollback_update(tmp_path: Path):
+    app_root = tmp_path / "InPhieuHienVat"
+    app_root.mkdir()
+    (app_root / "apps" / "0.1.0").mkdir(parents=True)
+    (app_root / "apps" / "0.1.0" / "InPhieuHienVat.exe").write_bytes(b"v0.1.0")
+    (app_root / "apps" / "0.1.1").mkdir(parents=True)
+    (app_root / "apps" / "0.1.1" / "InPhieuHienVat.exe").write_bytes(b"v0.1.1")
+
+    current_state = {"schema": 1, "version": "0.1.1", "entrypoint": "InPhieuHienVat.exe"}
+    prev_state = {"schema": 1, "version": "0.1.0", "entrypoint": "InPhieuHienVat.exe"}
+
+    (app_root / "current.json").write_text(json.dumps(current_state), encoding="utf-8")
+    (app_root / "previous.json").write_text(json.dumps(prev_state), encoding="utf-8")
+
+    rolled = rollback_update(app_root)
+    assert rolled["version"] == "0.1.0"
+    assert json.loads((app_root / "current.json").read_text(encoding="utf-8"))["version"] == "0.1.0"
+    assert json.loads((app_root / "previous.json").read_text(encoding="utf-8"))["version"] == "0.1.1"
+
+
+def test_resolve_current_entrypoint(tmp_path: Path):
+    app_root = tmp_path / "InPhieuHienVat"
+    app_root.mkdir()
+    version_dir = app_root / "apps" / "0.1.1"
+    version_dir.mkdir(parents=True)
+    exe_file = version_dir / "InPhieuHienVat.exe"
+    exe_file.write_bytes(b"mock exe content")
+    manifest_file = version_dir / "manifest.json"
+    manifest_file.write_text("{}", encoding="utf-8")
+    manifest_hash = sha256_file(manifest_file)
+
+    current_data = {
+        "schema": 1,
+        "version": "0.1.1",
+        "entrypoint": "InPhieuHienVat.exe",
+        "manifest_sha256": manifest_hash,
+    }
+    (app_root / "current.json").write_text(json.dumps(current_data), encoding="utf-8")
+
+    resolved = resolve_current_entrypoint(app_root)
+    assert resolved == exe_file
+
+    # Manifest hash mismatch should raise error
+    current_data["manifest_sha256"] = "0" * 64
+    (app_root / "current.json").write_text(json.dumps(current_data), encoding="utf-8")
+    with pytest.raises(LauncherStateError):
+        resolve_current_entrypoint(app_root)
+
+
+def test_safe_entrypoint():
+    assert _safe_entrypoint("InPhieuHienVat.exe") == "InPhieuHienVat.exe"
+    with pytest.raises(LauncherStateError):
+        _safe_entrypoint("../outside.exe")
+    with pytest.raises(LauncherStateError):
+        _safe_entrypoint("script.bat")
+
+
+def test_inno_setup_iss_and_language_files():
+    project_root = Path(__file__).resolve().parent.parent
+    iss_file = project_root / "installer" / "InPhieuHienVat.iss"
+    assert iss_file.is_file(), "installer/InPhieuHienVat.iss must exist"
+    iss_content = iss_file.read_text(encoding="utf-8")
+
+    release_file = project_root / "release.json"
+    assert release_file.is_file(), "release.json must exist"
+    release_data = json.loads(release_file.read_text(encoding="utf-8"))
+    version = release_data["version"]
+
+    # Check AppVersion matches release.json
+    assert f'#define AppVersion "{version}"' in iss_content
+    # Check AppId
+    assert 'AppId="{{CEBD9EDE-12C7-4E8A-BD6D-67FC0F3D3F43}}"' in iss_content or '#define AppId "{{CEBD9EDE-12C7-4E8A-BD6D-67FC0F3D3F43}}"' in iss_content
+    # Check DefaultDirName
+    assert "{localappdata}\\InPhieuHienVat" in iss_content
+    # Check PrivilegesRequired
+    assert "PrivilegesRequired=lowest" in iss_content
+    # Check Vietnamese language file is referenced and exists
+    assert 'MessagesFile: "languages\\Vietnamese.isl"' in iss_content
+    isl_file = project_root / "installer" / "languages" / "Vietnamese.isl"
+    assert isl_file.is_file(), "installer/languages/Vietnamese.isl must exist"
+    assert "Tiếng Việt" in isl_file.read_text(encoding="utf-8", errors="replace")

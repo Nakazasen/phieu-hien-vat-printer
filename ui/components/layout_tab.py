@@ -20,7 +20,8 @@ class LayoutTabPanel(ctk.CTkFrame):
         self.grid_rowconfigure(0, weight=1)
 
         # --- CỘT TRÁI: DANH SÁCH PHẦN TỬ ---
-        list_frame = ctk.CTkFrame(self, corner_radius=12)
+        self.list_frame = ctk.CTkFrame(self, corner_radius=12)
+        list_frame = self.list_frame
         list_frame.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
         list_frame.grid_rowconfigure(1, weight=1)
         list_frame.grid_columnconfigure(0, weight=1)
@@ -47,15 +48,21 @@ class LayoutTabPanel(ctk.CTkFrame):
         self.layout_tree.column("field", width=110, anchor="w")
         self.layout_tree.column("x", width=90, anchor="center")
         self.layout_tree.column("y", width=90, anchor="center")
-        self.layout_tree.grid(row=1, column=0, sticky="nsew", padx=(10, 0), pady=(0, 10))
+        self.layout_tree.grid(row=1, column=0, sticky="nsew", padx=(10, 0), pady=(0, 0))
 
         layout_scroll = ttk.Scrollbar(list_frame, orient="vertical", command=self.layout_tree.yview)
-        layout_scroll.grid(row=1, column=1, sticky="ns", padx=(0, 10), pady=(0, 10))
-        self.layout_tree.configure(yscrollcommand=layout_scroll.set)
+        layout_scroll.grid(row=1, column=1, sticky="ns", padx=(0, 10), pady=(0, 0))
+
+        tree_scroll_x = ttk.Scrollbar(list_frame, orient="horizontal", command=self.layout_tree.xview)
+        tree_scroll_x.grid(row=2, column=0, sticky="ew", padx=(10, 0), pady=(0, 10))
+
+        self.layout_tree.configure(yscrollcommand=layout_scroll.set, xscrollcommand=tree_scroll_x.set)
+        tree_scroll_x.configure(command=self.layout_tree.xview)
         self.layout_tree.bind("<<TreeviewSelect>>", self._on_tree_selected)
 
         # --- CỘT PHẢI: BẢNG ĐIỀU KHIỂN TRỰC QUAN (CUỘN MƯỢT, KHÔNG BỊ KHUẤT NÚT) ---
-        editor = ctk.CTkScrollableFrame(self, corner_radius=12)
+        self.editor_frame = ctk.CTkScrollableFrame(self, corner_radius=12)
+        editor = self.editor_frame
         editor.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
         editor.grid_columnconfigure(0, weight=1)
 

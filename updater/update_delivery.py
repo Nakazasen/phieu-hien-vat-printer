@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -17,6 +18,7 @@ CONFIG_SCHEMA = 1
 CATALOG_SCHEMA = 1
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 PACKAGE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.phieuupdate$", re.IGNORECASE)
+SOURCE_DISCOVERY_TIMEOUT_SECONDS = 2.0
 
 
 class UpdateDeliveryError(ValueError):
@@ -111,20 +113,46 @@ def _catalog(value: Any) -> tuple[str, str, int, str, str]:
     return package, version, size, digest.casefold(), notes
 
 
+def _discover_from_folder(folder: Path, current_version: str) -> UpdateCandidate | None:
+    """Return a verified update from one source, if it is newer."""
+    package_name, version, size, digest, notes = _catalog(_read_json(folder / "latest.json"))
+    package = folder / package_name
+    if package.is_file() and package.stat().st_size == size and sha256_file(package) == digest and _version(version) > _version(current_version):
+        return UpdateCandidate(version=version, package_path=package, size=size, sha256=digest, notes=notes)
+    return None
+
+
+def _discover_from_folder_with_timeout(folder: Path, current_version: str) -> UpdateCandidate | None:
+    """Bound a potentially stalled UNC probe without blocking the UI worker."""
+    result: list[UpdateCandidate | None] = []
+    completed = threading.Event()
+
+    def probe() -> None:
+        try:
+            result.append(_discover_from_folder(folder, current_version))
+        except (OSError, UpdateDeliveryError):
+            result.append(None)
+        finally:
+            completed.set()
+
+    threading.Thread(target=probe, daemon=True, name="inphieuhienvat-update-probe").start()
+    if not completed.wait(SOURCE_DISCOVERY_TIMEOUT_SECONDS):
+        return None
+    return result[0] if result else None
+
+
 def discover_update(paths: RuntimePaths, *, current_version: str) -> UpdateCandidate | None:
     config = load_update_config(paths)
     candidates: list[UpdateCandidate] = []
     for source in config["sources"]:
         if not source["enabled"]:
             continue
-        folder = Path(str(source["location"])).expanduser()
-        try:
-            package_name, version, size, digest, notes = _catalog(_read_json(folder / "latest.json"))
-            package = folder / package_name
-            if package.is_file() and package.stat().st_size == size and sha256_file(package) == digest and _version(version) > _version(current_version):
-                candidates.append(UpdateCandidate(version=version, package_path=package, size=size, sha256=digest, notes=notes))
-        except UpdateDeliveryError:
-            continue
+        candidate = _discover_from_folder_with_timeout(
+            Path(str(source["location"])).expanduser(),
+            current_version,
+        )
+        if candidate is not None:
+            candidates.append(candidate)
     return max(candidates, key=lambda item: _version(item.version), default=None)
 
 

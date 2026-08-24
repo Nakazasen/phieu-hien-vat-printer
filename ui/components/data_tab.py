@@ -1,7 +1,10 @@
+from collections import Counter
 from tkinter import ttk
+from typing import Optional
 
 import customtkinter as ctk
 
+from core.po_registry import FIXED_PO_DETAIL, FIXED_PO_SUB
 from ui.app_controller import AppController
 
 
@@ -20,14 +23,16 @@ class DataTabPanel(ctk.CTkFrame):
         # ==========================================
         # PANEL TRÁI: FORM NHẬP LIỆU & BẢNG DỮ LIỆU
         # ==========================================
-        left_panel = ctk.CTkFrame(self, fg_color="transparent")
+        self.left_panel = ctk.CTkFrame(self, fg_color="transparent")
+        left_panel = self.left_panel
         left_panel.grid(row=0, column=0, sticky="nsew", padx=(10, 5), pady=10)
         left_panel.grid_columnconfigure(0, weight=1)
         left_panel.grid_rowconfigure(0, weight=0)  # Form gọn cố định chiều cao
         left_panel.grid_rowconfigure(1, weight=1)  # Bảng dữ liệu tự động giãn hết chiều cao còn lại
 
         # --- 1. FORM NHẬP LIỆU GỌN GÀNG (2 CẶP CỘT RỘNG RÃI) ---
-        form_frame = ctk.CTkFrame(left_panel, corner_radius=12)
+        self.form_frame = ctk.CTkFrame(left_panel, corner_radius=12)
+        form_frame = self.form_frame
         form_frame.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         form_frame.grid_columnconfigure(1, weight=1)
         form_frame.grid_columnconfigure(3, weight=2)
@@ -41,12 +46,29 @@ class DataTabPanel(ctk.CTkFrame):
             header_row, textvariable=self.app_state.form_mode_var, font=ctk.CTkFont(size=14, weight="bold")
         ).grid(row=0, column=0, sticky="w")
 
+        right_header = ctk.CTkFrame(header_row, fg_color="transparent")
+        right_header.grid(row=0, column=1, sticky="e")
+
+        self.btn_qr_scan = ctk.CTkButton(
+            right_header,
+            text="📷 Quét QR",
+            height=26,
+            width=90,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="#2563EB",
+            hover_color="#1D4ED8",
+            text_color="white",
+            command=self.controller.open_qr_scan_dialog,
+        )
+        self.btn_qr_scan.pack(side="right", padx=(8, 0))
+
         ctk.CTkLabel(
-            header_row,
-            text="(*) Bắt buộc · Tổng SL = SL thùng x Box · Lot trống = 10 spaces",
+            right_header,
+            text="(*) Bắt buộc · Tổng SL = SL thùng x Box",
             font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"),
-        ).grid(row=0, column=1, sticky="e")
+            wraplength=300,
+        ).pack(side="right")
 
         # Hàng 1: Mã hàng (*) | Tên hàng (*)
         self._form_field(form_frame, 1, 0, "Mã hàng (*):", self.app_state.item_code_var)
@@ -71,15 +93,15 @@ class DataTabPanel(ctk.CTkFrame):
         po_sub_frame.grid(row=4, column=2, columnspan=2, sticky="ew", padx=(6, 12), pady=2)
         po_sub_frame.grid_columnconfigure((1, 3), weight=1)
 
-        ctk.CTkLabel(po_sub_frame, text="PO chi tiết:", font=ctk.CTkFont(size=11, weight="bold")).grid(
-            row=0, column=0, padx=(0, 4)
+        ctk.CTkLabel(po_sub_frame, text="Chi tiết:", font=ctk.CTkFont(size=11, weight="bold")).grid(
+            row=0, column=0, padx=(0, 2)
         )
         self.po_detail_entry = ctk.CTkEntry(po_sub_frame, textvariable=self.app_state.po_detail_var, height=28, font=ctk.CTkFont(size=12))
-        self.po_detail_entry.grid(row=0, column=1, sticky="ew", padx=(0, 8))
+        self.po_detail_entry.grid(row=0, column=1, sticky="ew", padx=(0, 6))
         self.po_detail_entry.configure(state="disabled")
 
-        ctk.CTkLabel(po_sub_frame, text="PO phụ:", font=ctk.CTkFont(size=11, weight="bold")).grid(
-            row=0, column=2, padx=(0, 4)
+        ctk.CTkLabel(po_sub_frame, text="Phụ:", font=ctk.CTkFont(size=11, weight="bold")).grid(
+            row=0, column=2, padx=(0, 2)
         )
         self.po_sub_entry = ctk.CTkEntry(po_sub_frame, textvariable=self.app_state.po_sub_var, height=28, font=ctk.CTkFont(size=12))
         self.po_sub_entry.grid(row=0, column=3, sticky="ew")
@@ -93,9 +115,10 @@ class DataTabPanel(ctk.CTkFrame):
 
         ctk.CTkLabel(
             form_frame,
-            text="(Mặc định để trống = 10 dấu cách trong mã QR)",
+            text="(Để trống = 10 dấu cách trong QR)",
             font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"),
+            wraplength=260,
         ).grid(row=5, column=2, columnspan=2, sticky="w", padx=(6, 12), pady=2)
 
         # Hàng 6: Nút thao tác chính (Primary Actions - Hàng 1)
@@ -103,21 +126,24 @@ class DataTabPanel(ctk.CTkFrame):
         btn_bar_1.grid(row=6, column=0, columnspan=4, sticky="ew", padx=10, pady=(6, 2))
         btn_bar_1.grid_columnconfigure((0, 1, 2), weight=1)
 
-        ctk.CTkButton(
+        self.btn_add_record = ctk.CTkButton(
             btn_bar_1, text="➕ Thêm mới", height=32, font=ctk.CTkFont(size=12, weight="bold"),
             fg_color="#10B981", hover_color="#059669", text_color="white", command=self.controller.add_record
-        ).grid(row=0, column=0, sticky="ew", padx=3)
+        )
+        self.btn_add_record.grid(row=0, column=0, sticky="ew", padx=3)
 
-        ctk.CTkButton(
+        self.btn_update_record = ctk.CTkButton(
             btn_bar_1, text="💾 Cập nhật dòng", height=32, font=ctk.CTkFont(size=12, weight="bold"),
             fg_color="#2563EB", hover_color="#1D4ED8", text_color="white", command=self.controller.update_selected_record
-        ).grid(row=0, column=1, sticky="ew", padx=3)
+        )
+        self.btn_update_record.grid(row=0, column=1, sticky="ew", padx=3)
 
-        ctk.CTkButton(
+        self.btn_delete_record = ctk.CTkButton(
             btn_bar_1, text="🗑️ Xóa dòng", height=32, font=ctk.CTkFont(size=12, weight="bold"),
             fg_color=("#EF4444", "#991B1B"), hover_color=("#DC2626", "#7F1D1D"), text_color="white",
             command=self.controller.delete_selected_record
-        ).grid(row=0, column=2, sticky="ew", padx=3)
+        )
+        self.btn_delete_record.grid(row=0, column=2, sticky="ew", padx=3)
 
         # Hàng 7: Nút tiện ích phụ (Secondary Utilities - Hàng 2)
         btn_bar_2 = ctk.CTkFrame(form_frame, fg_color="transparent")
@@ -142,7 +168,8 @@ class DataTabPanel(ctk.CTkFrame):
         ).grid(row=0, column=2, sticky="ew", padx=3)
 
         # --- 2. BẢNG DỮ LIỆU (TREEVIEW - CHIẾM TOÀN BỘ KHÔNG GIAN CÒN LẠI) ---
-        table_frame = ctk.CTkFrame(left_panel, corner_radius=12)
+        self.table_frame = ctk.CTkFrame(left_panel, corner_radius=12)
+        table_frame = self.table_frame
         table_frame.grid(row=1, column=0, sticky="nsew")
         table_frame.grid_rowconfigure(0, weight=1)
         table_frame.grid_columnconfigure(0, weight=1)
@@ -175,10 +202,14 @@ class DataTabPanel(ctk.CTkFrame):
         tree_scroll_x.grid(row=1, column=0, sticky="ew", padx=(10, 10), pady=(0, 10))
         self.preview_tree.bind("<<TreeviewSelect>>", self._on_tree_selected)
 
+        # Highlight duplicate rows in red (Requirement R2)
+        self.preview_tree.tag_configure("duplicate", background="#FEE2E2", foreground="#991B1B")
+
         # ==========================================
         # PANEL PHẢI: XEM TRƯỚC TRANG IN & MÃ QR
         # ==========================================
-        preview_frame = ctk.CTkFrame(self, corner_radius=12)
+        self.preview_frame = ctk.CTkFrame(self, corner_radius=12)
+        preview_frame = self.preview_frame
         preview_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
         preview_frame.grid_rowconfigure(1, weight=1)
         preview_frame.grid_columnconfigure(0, weight=1)
@@ -200,11 +231,12 @@ class DataTabPanel(ctk.CTkFrame):
         self.qr_payload_box.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 8))
         self.qr_payload_box.configure(state="disabled")
 
-        ctk.CTkButton(
+        self.btn_refresh_preview = ctk.CTkButton(
             preview_frame, text="🔄 Làm mới xem trước", height=32,
             fg_color=("gray85", "gray25"), text_color=("gray10", "gray90"), hover_color=("gray75", "gray35"),
             command=self.refresh_preview_image
-        ).grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 12))
+        )
+        self.btn_refresh_preview.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 12))
 
         # Init state listeners
         self.app_state.carton_qty_var.trace_add("write", self.controller.sync_total_qty)
@@ -236,6 +268,18 @@ class DataTabPanel(ctk.CTkFrame):
             self.app_state.preview_limit_var.set("50")
             preview_limit = 50
 
+        # Calculate duplicate frequencies within current records (Requirement R2)
+        combo_counts = Counter(
+            (
+                r.po.strip(),
+                r.po_detail.strip() or FIXED_PO_DETAIL,
+                r.po_sub.strip() or FIXED_PO_SUB,
+                r.box.strip(),
+            )
+            for r in self.app_state.records
+            if r.po.strip()
+        )
+
         display_records = self.app_state.records[:preview_limit]
         for display_index, record in enumerate(display_records):
             lot = "(10 dấu cách)" if record.lot == (" " * 10) else record.lot
@@ -244,7 +288,21 @@ class DataTabPanel(ctk.CTkFrame):
                 record.total_qty, record.qty_display, record.po, record.po_detail, record.po_sub,
                 record.box, record.rev, lot
             )
-            self.preview_tree.insert("", "end", iid=str(display_index), values=values)
+            po = record.po.strip()
+            po_detail = record.po_detail.strip() or FIXED_PO_DETAIL
+            po_sub = record.po_sub.strip() or FIXED_PO_SUB
+            box = record.box.strip()
+
+            is_duplicate = False
+            if po:
+                combo_key = (po, po_detail, po_sub, box)
+                is_duplicate = (
+                    self.app_state.po_registry.is_registered(po, po_detail, po_sub, box)
+                    or combo_counts[combo_key] > 1
+                )
+
+            tags = ("duplicate",) if is_duplicate else ()
+            self.preview_tree.insert("", "end", iid=str(display_index), values=values, tags=tags)
             self.app_state.preview_index_map.append(display_index)
 
         if self.app_state.records:
@@ -375,3 +433,79 @@ class DataTabPanel(ctk.CTkFrame):
         self.app_state.records[self.app_state.selected_record_index] = record
         self.set_records(select_index=self.app_state.selected_record_index)
         return True
+
+    # --- TUTORIAL ACCESSOR METHODS ---
+
+    def get_form_frame(self) -> Optional[ctk.CTkFrame]:
+        """Returns the manual entry form container frame."""
+        return getattr(self, "form_frame", None)
+
+    def get_auto_po_widget(self) -> Optional[ctk.CTkEntry]:
+        """Returns the auto-generated PO number entry widget."""
+        return getattr(self, "po_entry", None)
+
+    def get_po_detail_widget(self) -> Optional[ctk.CTkEntry]:
+        """Returns the PO detail entry widget."""
+        return getattr(self, "po_detail_entry", None)
+
+    def get_po_sub_widget(self) -> Optional[ctk.CTkEntry]:
+        """Returns the PO sub entry widget."""
+        return getattr(self, "po_sub_entry", None)
+
+    def get_add_button_widget(self) -> Optional[ctk.CTkButton]:
+        """Returns the '➕ Thêm mới' primary action button widget."""
+        return getattr(self, "btn_add_record", None)
+
+    def get_update_button_widget(self) -> Optional[ctk.CTkButton]:
+        """Returns the '💾 Cập nhật dòng' button widget."""
+        return getattr(self, "btn_update_record", None)
+
+    def get_delete_button_widget(self) -> Optional[ctk.CTkButton]:
+        """Returns the '🗑️ Xóa dòng' button widget."""
+        return getattr(self, "btn_delete_record", None)
+
+    def get_qr_button_widget(self) -> Optional[ctk.CTkButton]:
+        """Returns the '📷 Quét QR' button widget in the form header."""
+        return getattr(self, "btn_qr_scan", None)
+
+    def get_treeview_widget(self) -> Optional[ttk.Treeview]:
+        """Returns the Treeview table widget."""
+        return getattr(self, "preview_tree", None)
+
+    def get_table_frame(self) -> Optional[ctk.CTkFrame]:
+        """Returns the table container frame."""
+        return getattr(self, "table_frame", None)
+
+    def get_preview_frame(self) -> Optional[ctk.CTkFrame]:
+        """Returns the preview container frame on the right panel."""
+        return getattr(self, "preview_frame", None)
+
+    def get_preview_image_label(self) -> Optional[ctk.CTkLabel]:
+        """Returns the label displaying the slip preview image."""
+        return getattr(self, "preview_image_label", None)
+
+    def get_qr_payload_box(self) -> Optional[ctk.CTkTextbox]:
+        """Returns the textbox displaying the QR code payload."""
+        return getattr(self, "qr_payload_box", None)
+
+    def get_refresh_preview_button(self) -> Optional[ctk.CTkButton]:
+        """Returns the '🔄 Làm mới xem trước' button widget."""
+        return getattr(self, "btn_refresh_preview", None)
+
+    # --- COMPATIBILITY PROPERTY ALIASES ---
+
+    @property
+    def qr_scan_btn(self) -> Optional[ctk.CTkButton]:
+        return self.get_qr_button_widget()
+
+    @property
+    def add_btn(self) -> Optional[ctk.CTkButton]:
+        return self.get_add_button_widget()
+
+    @property
+    def update_btn(self) -> Optional[ctk.CTkButton]:
+        return self.get_update_button_widget()
+
+    @property
+    def delete_btn(self) -> Optional[ctk.CTkButton]:
+        return self.get_delete_button_widget()

@@ -1,0 +1,68 @@
+--- a/pptx_translation/openxml_typography.py
++++ b/pptx_translation/openxml_typography.py
+@@ -5,7 +5,7 @@
+ """
+ 
+ from pptx.util import Inches, Pt
+-from pptx.oxml import SubElement
++from pptx.oxml.xmlchemy import OxmlElement
+ from pptx.oxml.ns import qn
+ 
+ 
+@@ -29,13 +29,15 @@
+         # 1. Update defRPr in pPr
+         defRPr = pPr.find(qn('a:defRPr'))
+         if defRPr is None:
+-            defRPr = SubElement(pPr, qn('a:defRPr'))
++            defRPr = OxmlElement('a:defRPr')
++            pPr.append(defRPr)
+         _set_font_nodes(defRPr)
+         
+         # 2. Update endParaRPr
+         endParaRPr = p.find(qn('a:endParaRPr'))
+         if endParaRPr is None:
+-            endParaRPr = SubElement(p, qn('a:endParaRPr'))
++            endParaRPr = OxmlElement('a:endParaRPr')
++            p.append(endParaRPr)
+         _set_font_nodes(endParaRPr)
+         return
+     else:
+@@ -49,23 +51,26 @@
+     # 1. Latin Typeface
+     latin = rPr_node.find(qn('a:latin'))
+     if latin is None:
+-        latin = SubElement(rPr_node, qn('a:latin'))
++        latin = OxmlElement('a:latin')
++        rPr_node.append(latin)
+     latin.set('typeface', 'Times New Roman')
+     latin.set('pitchFamily', '18')
+     latin.set('charset', '0')
+ 
+     # 2. East Asian Typeface (Overwrites MS Gothic, Meiryo, Yu Gothic)
+     ea = rPr_node.find(qn('a:ea'))
+     if ea is None:
+-        ea = SubElement(rPr_node, qn('a:ea'))
++        ea = OxmlElement('a:ea')
++        rPr_node.append(ea)
+     ea.set('typeface', 'Times New Roman')
+     ea.set('pitchFamily', '18')
+     ea.set('charset', '0')
+ 
+     # 3. Complex Script Typeface
+     cs = rPr_node.find(qn('a:cs'))
+     if cs is None:
+-        cs = SubElement(rPr_node, qn('a:cs'))
++        cs = OxmlElement('a:cs')
++        rPr_node.append(cs)
+     cs.set('typeface', 'Times New Roman')
+     cs.set('pitchFamily', '18')
+     cs.set('charset', '0')
+@@ -110,7 +115,7 @@
+                     bodyPr.remove(elem)
+             
+             if bodyPr.find(qn('a:normAutofit')) is None:
+-                SubElement(bodyPr, qn('a:normAutofit'))
++                bodyPr.append(OxmlElement('a:normAutofit'))
+         except Exception:
+             pass
+ 
