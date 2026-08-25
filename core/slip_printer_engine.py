@@ -926,17 +926,29 @@ def generate_preview_image(
     layout_config: dict[str, Any],
     *,
     zoom: float = 1.35,
+    clip: fitz.Rect | None = EDI_TEMPLATE_CROP,
 ) -> Image.Image:
+    """Render a preview of the printed EDI label for one record.
+
+    By default only the actual EDI label region (EDI_TEMPLATE_CROP — the exact
+    rectangle that gets cropped and tiled 4-per-A4 by the print pipeline) is
+    rendered, so the preview shows readable label content instead of a tiny
+    label floating on a full A4 page. Pass ``clip=None`` to render the full page.
+    """
     overlay_buffer = create_overlay_pdf([record.with_payload()], layout_config)
     merged_pdf_bytes = merge_overlay_with_template_bytes(overlay_buffer, template_pdf_path)
-    return render_pdf_first_page(merged_pdf_bytes, zoom=zoom)
+    return render_pdf_first_page(merged_pdf_bytes, zoom=zoom, clip=clip)
 
 
-def render_pdf_first_page(pdf_bytes: bytes, *, zoom: float = 1.35) -> Image.Image:
+def render_pdf_first_page(pdf_bytes: bytes, *, zoom: float = 1.35, clip: fitz.Rect | None = None) -> Image.Image:
     document = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
         page = document.load_page(0)
-        pixmap = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        matrix = fitz.Matrix(zoom, zoom)
+        if clip is not None:
+            pixmap = page.get_pixmap(matrix=matrix, clip=fitz.Rect(clip), alpha=False)
+        else:
+            pixmap = page.get_pixmap(matrix=matrix, alpha=False)
         return Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
     finally:
         document.close()

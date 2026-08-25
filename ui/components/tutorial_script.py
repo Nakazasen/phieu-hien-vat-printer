@@ -72,6 +72,8 @@ def build_tutorial_steps(app: Optional[Any] = None) -> list[TutorialStep]:
             resolved = _resolve_app(app)
             if resolved is None:
                 return None
+            # Legacy locations first (older layouts / mock objects); the real app
+            # no longer has these buttons, so resolution falls through to qr_tab.
             sidebar = getattr(resolved, "sidebar", None)
             if sidebar is not None:
                 if hasattr(sidebar, "get_qr_scan_widget"):
@@ -104,6 +106,17 @@ def build_tutorial_steps(app: Optional[Any] = None) -> list[TutorialStep]:
                             return w
                     except Exception:
                         pass
+            # Preferred: dedicated QR scan tab (consolidates the two legacy buttons)
+            qr_tab = getattr(resolved, "qr_tab", None)
+            if qr_tab is not None:
+                if hasattr(qr_tab, "get_scan_panel_widget"):
+                    try:
+                        w = qr_tab.get_scan_panel_widget()
+                        if w is not None:
+                            return w
+                    except Exception:
+                        pass
+                return qr_tab
             return None
         except Exception:
             return None
@@ -203,13 +216,13 @@ def build_tutorial_steps(app: Optional[Any] = None) -> list[TutorialStep]:
         step_id="step_qr_scanner",
         title="2. Quét mã QR thông minh",
         description=(
-            "Bấm '⚡ Quét QR' để mở công cụ quét tem chuyên dụng với 3 chế độ:\n\n"
+            "Mở tab '📷 Quét QR' (cạnh Lịch sử Đăng ký EDI) để dùng công cụ quét tem chuyên dụng với 3 chế độ:\n\n"
             "1. Phân tách (分割): Quét tem nguồn, rồi phát hành từng tem tách bằng cách tăng chữ số thứ nhất của mã chi tiết (00010 → 10010 → 20010).\n"
             "2. Hoàn kho (戻入): Quét tem cần hoàn; giữ nguyên chữ số thứ nhất và tăng chữ số thứ hai (10010 → 11010, 20010 → 21010, 11010 → 12010).\n"
             "3. In lại (再発行): Giải mã chuỗi QR 129 ký tự và giữ nguyên mã chi tiết của tem đã quét để tái phát hành."
         ),
         target_widget_getter=_get_qr_target,
-        target_tab_index=0,
+        target_tab_index=3,
         tooltip_position="right",
         padding=8,
     )

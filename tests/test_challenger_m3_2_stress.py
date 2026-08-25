@@ -491,7 +491,7 @@ class TestEndToEndIntegrationAndAdversarialStress:
             app.update_idletasks()
             assert overlay.current_step_index == 1
             assert overlay.steps[1].step_id == "step_qr_scanner"
-            assert overlay.steps[1].target_widget_getter() is app.sidebar.qr_scan_button
+            assert overlay.steps[1].target_widget_getter() is app.qr_tab.scan_panel
 
             # Advance to Step 3 (Auto PO)
             overlay.next_step()

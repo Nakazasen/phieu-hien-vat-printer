@@ -224,7 +224,7 @@ def test_extreme_resizing_sequence_full_app(tk_root):
 
             # Check buttons in DataTab
             buttons = _get_action_buttons(data_tab)
-            assert len(buttons) >= 6, f"Step {step_idx} ({label}) Expected 6 action buttons, found {len(buttons)}"
+            assert len(buttons) >= 5, f"Step {step_idx} ({label}) Expected 5 action buttons, found {len(buttons)}"
             for text, btn in buttons.items():
                 bw = btn.winfo_width()
                 assert bw >= 70, f"Step {step_idx} ({label}) Button '{text}' width {bw}px < 70px"
@@ -344,7 +344,6 @@ def test_action_buttons_at_1000x700_minimum(tk_root):
             "➕ Thêm mới",
             "💾 Cập nhật dòng",
             "🗑️ Xóa dòng",
-            "Lot = 10 space",
             "📋 Điền mẫu",
             "🧹 Xóa form",
         ]
@@ -369,14 +368,18 @@ def test_action_buttons_at_1000x700_minimum(tk_root):
         assert state.box_var.get() == "001/003"
         assert state.total_qty_var.get() == "60"
 
-        # 2. Fill lot spaces
-        controller.fill_lot_spaces()
-        assert state.lot_var.get() == ""
-
-        # 3. Clear form
+        # 2. Clear form must wipe every field, including Rev
         data_tab.clear_form()
         assert state.item_code_var.get() == ""
         assert state.item_name_var.get() == ""
-        assert state.rev_var.get() == "01"
+        assert state.carton_qty_var.get() == ""
+        assert state.total_qty_var.get() == ""
+        assert state.po_var.get() == ""
+        assert state.po_detail_var.get() == ""
+        assert state.po_sub_var.get() == ""
+        assert state.box_var.get() == ""
+        assert state.rev_var.get() == ""
+        assert state.lot_var.get() == ""
+        assert state.form_mode_var.get() == "Đang tạo dòng mới"
     finally:
         state.po_registry.close()

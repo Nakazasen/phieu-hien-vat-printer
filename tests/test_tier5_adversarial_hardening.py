@@ -24,6 +24,7 @@ from core.slip_printer_engine import create_record
 from ui.app_controller import AppController
 from ui.app_state import AppState
 from ui.components.data_tab import DataTabPanel
+from ui.components.qr_scan_tab import QRScanTabPanel
 from ui.components.sidebar import SidebarPanel
 from ui.components.tutorial_overlay import (
     GeometryHelper,
@@ -631,15 +632,18 @@ class TestTier55AppLifecycleAndUIIntegrity:
         notebook.pack(side="right", fill="both", expand=True)
         data_tab = DataTabPanel(notebook, controller)
         notebook.add(data_tab, text="Data")
+        qr_tab = QRScanTabPanel(notebook, controller)
+        notebook.add(qr_tab, text="Quét QR")
         root.update_idletasks()
 
         class MockAppView:
-            def __init__(self, sb, dt, nb):
+            def __init__(self, sb, dt, nb, qt):
                 self.sidebar = sb
                 self.data_tab = dt
                 self.notebook = nb
+                self.qr_tab = qt
 
-        view = MockAppView(sidebar, data_tab, notebook)
+        view = MockAppView(sidebar, data_tab, notebook, qr_tab)
         controller.set_view(view)
 
         steps = build_tutorial_steps(view)
@@ -649,9 +653,9 @@ class TestTier55AppLifecycleAndUIIntegrity:
         w1 = steps[0].target_widget_getter()
         assert w1 is not None
 
-        # Step 2: QR Scanner target
+        # Step 2: QR Scanner target (dedicated QR tab panel)
         w2 = steps[1].target_widget_getter()
-        assert w2 is not None
+        assert w2 is qr_tab.scan_panel
 
         # Step 3: Auto PO / Form target
         w3 = steps[2].target_widget_getter()

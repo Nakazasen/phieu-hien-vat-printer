@@ -21,8 +21,12 @@ if TYPE_CHECKING:
     from ui.app_controller import AppController
 
 
-class QRScanDialog(ctk.CTkToplevel):
-    """Modal dialog for scanning QR codes, extracting data, and applying Split / Return operations."""
+class QRScanPanel(ctk.CTkFrame):
+    """Reusable QR scan surface: mode selection, gun/paste input, decoded form and actions.
+
+    Can be embedded directly in a Notebook tab (embedded=True) or hosted inside
+    the modal QRScanDialog (embedded=False).
+    """
 
     MODE_SPLIT = "split"
     MODE_RETURN = "return"
@@ -31,15 +35,11 @@ class QRScanDialog(ctk.CTkToplevel):
     MODE_RETURN_LABEL = "Ho\u00e0n kho (\u623b\u5165)"
     MODE_REISSUE_LABEL = "In l\u1ea1i (\u518d\u767a\u884c)"
 
-    def __init__(self, parent, controller: AppController):
-        super().__init__(parent)
+    def __init__(self, parent, controller: AppController, embedded: bool = False, **kwargs):
+        super().__init__(parent, **kwargs)
         self.controller = controller
         self.app_state = controller.app_state
-
-        self.title("Quét QR Nghiệp vụ — Phân tách (分割) & Hoàn kho (戻入)")
-        self.geometry("740x680")
-        self.minsize(680, 600)
-        self.transient(parent)
+        self.embedded = embedded
 
         # Variables
         self.mode_var = ctk.StringVar(value=self.MODE_SPLIT)
@@ -67,18 +67,6 @@ class QRScanDialog(ctk.CTkToplevel):
         self.po_detail_var.trace_add("write", self._update_payload_preview)
 
         self._build_ui()
-
-        # Center on parent window
-        self.update_idletasks()
-        try:
-            px = parent.winfo_rootx() + (parent.winfo_width() - self.winfo_width()) // 2
-            py = parent.winfo_rooty() + (parent.winfo_height() - self.winfo_height()) // 2
-            self.geometry(f"+{max(10, px)}+{max(10, py)}")
-        except Exception:  # noqa: BLE001
-            pass
-
-        self.grab_set()
-        self.scan_entry.focus_set()
 
     def _build_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
@@ -128,7 +116,7 @@ class QRScanDialog(ctk.CTkToplevel):
 
         self.decode_btn = ctk.CTkButton(
             scan_frame,
-            text="🔍 Giải mã",
+            text="📖 Đọc tem",
             width=90,
             height=36,
             font=ctk.CTkFont(size=12, weight="bold"),
@@ -153,7 +141,7 @@ class QRScanDialog(ctk.CTkToplevel):
 
         # Row 2: Carton Qty & Box count
         self._add_field(form_frame, 2, 0, "Số lượng / thùng (*):", self.carton_qty_var)
-        self._add_field(form_frame, 2, 2, "Số box (hoặc 001/00N):", self.box_var)
+        self._add_field(form_frame, 2, 2, "Số thùng (hoặc 001/00N):", self.box_var)
 
         # Row 3: Total Qty & Rev
         self._add_field(form_frame, 3, 0, "Tổng số lượng:", self.total_qty_var, readonly=True)
@@ -207,39 +195,73 @@ class QRScanDialog(ctk.CTkToplevel):
 
         btn_row = ctk.CTkFrame(footer_frame, fg_color="transparent")
         btn_row.grid(row=1, column=0, sticky="ew")
-        btn_row.grid_columnconfigure((0, 1, 2), weight=1)
 
-        ctk.CTkButton(
-            btn_row,
-            text="➕ Thêm vào danh sách in",
-            height=36,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            fg_color="#10B981",
-            hover_color="#059669",
-            text_color="white",
-            command=self.confirm_and_add_records,
-        ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        if self.embedded:
+            # Embedded tab mode: two primary actions side by side
+            btn_row.grid_columnconfigure((0, 1), weight=1)
 
-        ctk.CTkButton(
-            btn_row,
-            text="📋 Điền vào Form chính",
-            height=36,
-            font=ctk.CTkFont(size=12, weight="bold"),
-            fg_color="#2563EB",
-            hover_color="#1D4ED8",
-            text_color="white",
-            command=self.apply_to_main_form,
-        ).grid(row=0, column=1, sticky="ew", padx=4)
+            ctk.CTkButton(
+                btn_row,
+                text="➕ Thêm vào danh sách in",
+                height=36,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#10B981",
+                hover_color="#059669",
+                text_color="white",
+                command=self.confirm_and_add_records,
+            ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
-        ctk.CTkButton(
-            btn_row,
-            text="Đóng",
-            height=36,
-            fg_color=("gray80", "gray30"),
-            hover_color=("gray70", "gray40"),
-            text_color=("black", "white"),
-            command=self.destroy,
-        ).grid(row=0, column=2, sticky="ew", padx=(4, 0))
+            ctk.CTkButton(
+                btn_row,
+                text="📋 Điền vào Form chính",
+                height=36,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#2563EB",
+                hover_color="#1D4ED8",
+                text_color="white",
+                command=self.apply_to_main_form,
+            ).grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        else:
+            btn_row.grid_columnconfigure((0, 1, 2), weight=1)
+
+            ctk.CTkButton(
+                btn_row,
+                text="➕ Thêm vào danh sách in",
+                height=36,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#10B981",
+                hover_color="#059669",
+                text_color="white",
+                command=self.confirm_and_add_records,
+            ).grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+            ctk.CTkButton(
+                btn_row,
+                text="📋 Điền vào Form chính",
+                height=36,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                fg_color="#2563EB",
+                hover_color="#1D4ED8",
+                text_color="white",
+                command=self.apply_to_main_form,
+            ).grid(row=0, column=1, sticky="ew", padx=4)
+
+            ctk.CTkButton(
+                btn_row,
+                text="Đóng",
+                height=36,
+                fg_color=("gray80", "gray30"),
+                hover_color=("gray70", "gray40"),
+                text_color=("black", "white"),
+                command=self.master.destroy,
+            ).grid(row=0, column=2, sticky="ew", padx=(4, 0))
+
+    def focus_scan_entry(self) -> None:
+        """Move keyboard focus to the QR scan input field."""
+        try:
+            self.scan_entry.focus_set()
+        except Exception:  # noqa: BLE001
+            pass
 
     def _add_field(
         self,
@@ -326,7 +348,7 @@ class QRScanDialog(ctk.CTkToplevel):
             messagebox.showwarning(
                 "Chưa có mã QR",
                 "Ô quét mã QR đang trống.\n\n"
-                "👉 Hướng dẫn: Vui lòng dùng súng quét mã bắn vào mã QR trên tem hoặc dán chuỗi ký tự QR (129 ký tự) vào ô nhập liệu rồi nhấn '🔍 Giải mã'.",
+                "👉 Hướng dẫn: Vui lòng dùng súng quét mã bắn vào mã QR trên tem hoặc dán chuỗi ký tự QR (129 ký tự) vào ô nhập liệu rồi nhấn '📖 Đọc tem'.",
             )
             return
 
@@ -424,9 +446,9 @@ class QRScanDialog(ctk.CTkToplevel):
         if not item_name:
             raise ValueError("Tên hàng không được để trống.")
         if not carton_qty:
-            raise ValueError("Số lượng thùng không được để trống.")
+            raise ValueError("SL/thùng không được để trống.")
         if not box_input:
-            raise ValueError("Số box không được để trống.")
+            raise ValueError("Số thùng không được để trống.")
         if not po:
             raise ValueError("PO không được để trống.")
         if not po_detail:
@@ -493,7 +515,7 @@ class QRScanDialog(ctk.CTkToplevel):
 
         self.status_msg_var.set(f"✅ {log_msg}. Sẵn sàng quét tem tiếp theo.")
         self.scan_input_var.set("")
-        self.scan_entry.focus_set()
+        self.focus_scan_entry()
 
     def apply_to_main_form(self) -> None:
         try:
@@ -520,4 +542,68 @@ class QRScanDialog(ctk.CTkToplevel):
         self.app_state.status_var.set(f"Đã nạp dữ liệu từ nghiệp vụ QR: {first.item_code} (PO chi tiết: {first.po_detail})")
         if self.controller.view:
             self.controller.view.append_log("Đã điền thông tin QR vào form chính.")
-        self.destroy()
+
+        if self.embedded:
+            # Seamless flow: jump straight to the data tab so the operator can continue working
+            self._switch_to_data_tab()
+        else:
+            self.master.destroy()
+
+    def _switch_to_data_tab(self) -> None:
+        view = self.controller.view
+        notebook = getattr(view, "notebook", None)
+        if notebook is not None:
+            try:
+                notebook.select(0)
+            except Exception:  # noqa: BLE001
+                pass
+
+
+class QRScanDialog(ctk.CTkToplevel):
+    """Modal dialog hosting QRScanPanel for scanning QR, Split (分割) and Return (戻入) operations.
+
+    All attributes and methods of the underlying QRScanPanel are accessible
+    directly on the dialog instance via delegation.
+    """
+
+    MODE_SPLIT = QRScanPanel.MODE_SPLIT
+    MODE_RETURN = QRScanPanel.MODE_RETURN
+    MODE_DECODE = QRScanPanel.MODE_DECODE
+    MODE_SPLIT_LABEL = QRScanPanel.MODE_SPLIT_LABEL
+    MODE_RETURN_LABEL = QRScanPanel.MODE_RETURN_LABEL
+    MODE_REISSUE_LABEL = QRScanPanel.MODE_REISSUE_LABEL
+
+    def __init__(self, parent, controller: AppController):
+        super().__init__(parent)
+        self.controller = controller
+
+        self.title("Quét QR Nghiệp vụ — Phân tách (分割) & Hoàn kho (戻入)")
+        self.geometry("740x680")
+        self.minsize(680, 600)
+        self.transient(parent)
+
+        self.panel = QRScanPanel(self, controller, embedded=False)
+        self.panel.pack(fill="both", expand=True)
+
+        # Center on parent window
+        self.update_idletasks()
+        try:
+            px = parent.winfo_rootx() + (parent.winfo_width() - self.winfo_width()) // 2
+            py = parent.winfo_rooty() + (parent.winfo_height() - self.winfo_height()) // 2
+            self.geometry(f"+{max(10, px)}+{max(10, py)}")
+        except Exception:  # noqa: BLE001
+            pass
+
+        self.grab_set()
+        self.panel.focus_scan_entry()
+
+    def __getattr__(self, name: str):
+        panel = self.__dict__.get("panel")
+        if panel is not None:
+            try:
+                return getattr(panel, name)
+            except AttributeError:
+                pass
+        raise AttributeError(
+            f"{type(self).__name__!r} object has no attribute {name!r}"
+        )

@@ -73,10 +73,10 @@ def test_datatab_layout_and_responsive_height(tk_root):
         tab._select_tree_row(2)
         assert state.item_code_var.get() == "CODE-3"
         
-        # 6. Test clear form
+        # 6. Test clear form (must clear every field including Rev)
         tab.clear_form()
         assert state.item_code_var.get() == ""
-        assert state.rev_var.get() == "01"
+        assert state.rev_var.get() == ""
         assert state.form_mode_var.get() == "Đang tạo dòng mới"
 
         # 7. Test Add Record (Thêm mới) with Auto PO Generation

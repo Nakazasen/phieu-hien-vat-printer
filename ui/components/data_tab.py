@@ -49,19 +49,6 @@ class DataTabPanel(ctk.CTkFrame):
         right_header = ctk.CTkFrame(header_row, fg_color="transparent")
         right_header.grid(row=0, column=1, sticky="e")
 
-        self.btn_qr_scan = ctk.CTkButton(
-            right_header,
-            text="📷 Quét QR",
-            height=26,
-            width=90,
-            font=ctk.CTkFont(size=11, weight="bold"),
-            fg_color="#2563EB",
-            hover_color="#1D4ED8",
-            text_color="white",
-            command=self.controller.open_qr_scan_dialog,
-        )
-        self.btn_qr_scan.pack(side="right", padx=(8, 0))
-
         ctk.CTkLabel(
             right_header,
             text="(*) Bắt buộc · Tổng SL = SL thùng x Box",
@@ -74,14 +61,14 @@ class DataTabPanel(ctk.CTkFrame):
         self._form_field(form_frame, 1, 0, "Mã hàng (*):", self.app_state.item_code_var)
         self._form_field(form_frame, 1, 2, "Tên hàng (*):", self.app_state.item_name_var)
 
-        # Hàng 2: SL thùng (*) | Tổng số lượng (tự tính)
-        self._form_field(form_frame, 2, 0, "SL thùng (*):", self.app_state.carton_qty_var)
+        # Hàng 2: SL/thùng(*) | Tổng số lượng (tự tính)
+        self._form_field(form_frame, 2, 0, "SL/thùng(*):", self.app_state.carton_qty_var)
         self.total_qty_entry = self._form_field(
             form_frame, 2, 2, "Tổng SL (tự tính):", self.app_state.total_qty_var, is_readonly=True
         )
 
-        # Hàng 3: Số box (*) | Rev (*)
-        self._form_field(form_frame, 3, 0, "Số box (*):", self.app_state.box_var)
+        # Hàng 3: Số thùng(*) | Rev (*)
+        self._form_field(form_frame, 3, 0, "Số thùng(*):", self.app_state.box_var)
         self._form_field(form_frame, 3, 2, "Rev (*) (01–99):", self.app_state.rev_var)
 
         # Hàng 4: PO (tự sinh) | PO chi tiết & PO phụ (tự sinh)
@@ -148,24 +135,21 @@ class DataTabPanel(ctk.CTkFrame):
         # Hàng 7: Nút tiện ích phụ (Secondary Utilities - Hàng 2)
         btn_bar_2 = ctk.CTkFrame(form_frame, fg_color="transparent")
         btn_bar_2.grid(row=7, column=0, columnspan=4, sticky="ew", padx=10, pady=(2, 8))
-        btn_bar_2.grid_columnconfigure((0, 1, 2), weight=1)
-
-        ctk.CTkButton(
-            btn_bar_2, text="Lot = 10 space", height=28, font=ctk.CTkFont(size=11),
-            fg_color=("gray80", "gray30"), text_color=("black", "white"), hover_color=("gray70", "gray40"),
-            command=self.controller.fill_lot_spaces
-        ).grid(row=0, column=0, sticky="ew", padx=3)
+        btn_bar_2.grid_columnconfigure((0, 1), weight=1)
 
         ctk.CTkButton(
             btn_bar_2, text="📋 Điền mẫu", height=28, font=ctk.CTkFont(size=11),
             fg_color="transparent", border_width=1, border_color=("gray70", "gray40"),
             text_color=("gray30", "gray70"), hover_color=("gray90", "gray20"), command=self.controller.fill_sample_data
-        ).grid(row=0, column=1, sticky="ew", padx=3)
+        ).grid(row=0, column=0, sticky="ew", padx=3)
 
-        ctk.CTkButton(
-            btn_bar_2, text="🧹 Xóa form", height=28, font=ctk.CTkFont(size=11),
-            fg_color="transparent", text_color=("gray40", "gray60"), hover_color=("gray85", "gray25"), command=self.clear_form
-        ).grid(row=0, column=2, sticky="ew", padx=3)
+        # Viền đậm + chữ đậm để người dùng nhận ra nút xóa form
+        self.btn_clear_form = ctk.CTkButton(
+            btn_bar_2, text="🧹 Xóa form", height=28, font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color="transparent", border_width=2, border_color=("#6B7280", "#9CA3AF"),
+            text_color=("gray10", "gray90"), hover_color=("gray85", "gray25"), command=self.clear_form
+        )
+        self.btn_clear_form.grid(row=0, column=1, sticky="ew", padx=3)
 
         # --- 2. BẢNG DỮ LIỆU (TREEVIEW - CHIẾM TOÀN BỘ KHÔNG GIAN CÒN LẠI) ---
         self.table_frame = ctk.CTkFrame(left_panel, corner_radius=12)
@@ -222,7 +206,12 @@ class DataTabPanel(ctk.CTkFrame):
             preview_frame, text="Chưa có dữ liệu để xem trước", font=ctk.CTkFont(size=13), text_color="gray50"
         )
         self.preview_image_label.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 8))
-        self.preview_image_label.bind("<Configure>", lambda e: self._on_preview_resize())
+        # Debounce resize: coalesces the <Configure> flood during window drag-resize
+        # into a single re-thumbnail pass (prevents redraw storm on weak machines).
+        self._preview_resize_job = None
+        self._preview_display_key: tuple | None = None
+        self._preview_display_source = None
+        self.preview_image_label.bind("<Configure>", self._on_preview_resize)
 
         ctk.CTkLabel(preview_frame, text="Chuỗi QR của dòng đang chọn:", font=ctk.CTkFont(size=12, weight="bold")).grid(
             row=2, column=0, sticky="w", padx=14, pady=(0, 4)
@@ -319,6 +308,9 @@ class DataTabPanel(ctk.CTkFrame):
             self.app_state.summary_var.set("Chưa có dữ liệu")
             self.app_state.status_var.set("Thêm dữ liệu bằng form bên trái hoặc import từ Excel.")
             self.app_state.preview_source_image = None
+            self.app_state.current_preview_image = None
+            self._preview_display_key = None
+            self._preview_display_source = None
             self.preview_image_label.configure(text="Chưa có dữ liệu để xem trước", image=None)
             self.set_qr_payload_text("")
             self.app_state.form_mode_var.set("Đang tạo dòng mới")
@@ -369,7 +361,6 @@ class DataTabPanel(ctk.CTkFrame):
             self.app_state.po_sub_var, self.app_state.box_var, self.app_state.rev_var, self.app_state.lot_var,
         ):
             variable.set("")
-        self.app_state.rev_var.set("01")
         self.app_state.form_mode_var.set("Đang tạo dòng mới")
 
     def set_qr_payload_text(self, payload: str) -> None:
@@ -378,12 +369,26 @@ class DataTabPanel(ctk.CTkFrame):
         self.qr_payload_box.insert("1.0", payload)
         self.qr_payload_box.configure(state="disabled")
 
-    def _on_preview_resize(self) -> None:
-        if self.controller.view:
-            self.controller.view.update_preview_display()
+    def _on_preview_resize(self, _event=None) -> None:
+        # Debounced: fires once 80ms after the last resize event of a burst
+        if self._preview_resize_job is not None:
+            try:
+                self.after_cancel(self._preview_resize_job)
+            except Exception:  # noqa: BLE001
+                pass
+        self._preview_resize_job = self.after(80, self._do_preview_resize)
+
+    def _do_preview_resize(self) -> None:
+        self._preview_resize_job = None
+        try:
+            if self.controller.view:
+                self.controller.view.update_preview_display()
+        except Exception:  # noqa: BLE001
+            pass
 
     def update_preview_display(self) -> None:
-        if self.app_state.preview_source_image is None:
+        source = self.app_state.preview_source_image
+        if source is None:
             return
 
         width = max(self.preview_image_label.winfo_width() - 16, 120)
@@ -391,14 +396,32 @@ class DataTabPanel(ctk.CTkFrame):
         if width <= 0 or height <= 0:
             return
 
-        display_image = self.app_state.preview_source_image.copy()
+        # Skip re-thumbnail when the same source is already drawn at this size
+        cache_key = (width, height)
+        if (
+            self._preview_display_key == cache_key
+            and self._preview_display_source is source
+            and self.app_state.current_preview_image is not None
+        ):
+            return
+
+        display_image = source.copy()
         display_image.thumbnail((width, height))
         self.app_state.current_preview_image = ctk.CTkImage(
             light_image=display_image,
             dark_image=display_image,
             size=display_image.size,
         )
+        self._preview_display_key = cache_key
+        self._preview_display_source = source
         self.preview_image_label.configure(text="", image=self.app_state.current_preview_image)
+
+    def reset_preview_display(self) -> None:
+        """Clear the preview label and its display cache (used on render errors / empty state)."""
+        self.app_state.current_preview_image = None
+        self._preview_display_key = None
+        self._preview_display_source = None
+        self.preview_image_label.configure(image=None)
 
     def refresh_preview_image(self) -> None:
         if self.controller.view:
@@ -464,10 +487,6 @@ class DataTabPanel(ctk.CTkFrame):
         """Returns the '🗑️ Xóa dòng' button widget."""
         return getattr(self, "btn_delete_record", None)
 
-    def get_qr_button_widget(self) -> Optional[ctk.CTkButton]:
-        """Returns the '📷 Quét QR' button widget in the form header."""
-        return getattr(self, "btn_qr_scan", None)
-
     def get_treeview_widget(self) -> Optional[ttk.Treeview]:
         """Returns the Treeview table widget."""
         return getattr(self, "preview_tree", None)
@@ -493,10 +512,6 @@ class DataTabPanel(ctk.CTkFrame):
         return getattr(self, "btn_refresh_preview", None)
 
     # --- COMPATIBILITY PROPERTY ALIASES ---
-
-    @property
-    def qr_scan_btn(self) -> Optional[ctk.CTkButton]:
-        return self.get_qr_button_widget()
 
     @property
     def add_btn(self) -> Optional[ctk.CTkButton]:

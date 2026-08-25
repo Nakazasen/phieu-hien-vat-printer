@@ -482,8 +482,8 @@ def test_manual_add_validation_errors_fail_safely(tk_root, monkeypatch):
     invalid_cases = [
         ("", "Item Name", "10", "001/001", "01", "Bạn chưa nhập Mã hàng"),
         ("ITEM", "", "10", "001/001", "01", "Bạn chưa nhập Tên hàng"),
-        ("ITEM", "Item Name", "", "001/001", "01", "Bạn chưa nhập Số lượng thùng"),
-        ("ITEM", "Item Name", "10", "", "01", "Bạn chưa nhập Số box"),
+        ("ITEM", "Item Name", "", "001/001", "01", "Bạn chưa nhập SL/thùng"),
+        ("ITEM", "Item Name", "10", "", "01", "Bạn chưa nhập Số thùng"),
         ("ITEM", "Item Name", "10", "001/001", "ABC", "Rev phải có 2 chữ số"),
         ("ITEM", "Item Name", "10", "001/001", "0", "Rev phải có 2 chữ số"),
         ("ITEM", "Item Name", "10", "001/001", "000", "Rev phải có 2 chữ số"),

@@ -10,6 +10,7 @@ import pytest
 from ui.app_controller import AppController
 from ui.app_state import AppState
 from ui.components.data_tab import DataTabPanel
+from ui.components.qr_scan_tab import QRScanTabPanel
 from ui.components.sidebar import SidebarPanel
 from ui.components.tutorial_overlay import (
     InteractiveTutorialOverlay,
@@ -41,10 +42,14 @@ class TestTutorialScriptStructure:
         actual_ids = [s.step_id for s in steps]
         assert actual_ids == expected_ids
 
-    def test_all_steps_target_tab_index_zero(self):
+    def test_step_target_tab_indexes(self):
         steps = build_tutorial_steps(None)
         for step in steps:
-            assert step.target_tab_index == 0
+            if step.step_id == "step_qr_scanner":
+                # QR step spotlights the dedicated QR tab (index 3, next to EDI history)
+                assert step.target_tab_index == 3
+            else:
+                assert step.target_tab_index == 0
 
     def test_step1_excel_import_vietnamese_content(self):
         step = build_tutorial_steps(None)[0]
@@ -197,15 +202,12 @@ class TestSidebarAndDataTabAccessors:
             assert sidebar.get_excel_import_widget() is sidebar.excel_import_button
             assert sidebar.get_excel_path_widget() is sidebar.excel_entry
             assert sidebar.get_excel_frame_widget() is sidebar.excel_frame
-            assert sidebar.get_qr_scan_widget() is sidebar.qr_scan_button
             assert sidebar.get_generate_pdf_widget() is sidebar.generate_button
             assert sidebar.get_open_pdf_widget() is sidebar.open_pdf_button
 
             # Sidebar Property aliases
             assert sidebar.excel_import_btn is sidebar.excel_import_button
             assert sidebar.btn_import_excel is sidebar.excel_import_button
-            assert sidebar.qr_scan_btn is sidebar.qr_scan_button
-            assert sidebar.btn_qr_scan is sidebar.qr_scan_button
             assert sidebar.btn_generate_pdf is sidebar.generate_button
             assert sidebar.open_pdf_btn is sidebar.open_pdf_button
             assert sidebar.btn_open_pdf is sidebar.open_pdf_button
@@ -218,7 +220,6 @@ class TestSidebarAndDataTabAccessors:
             assert data_tab.get_add_button_widget() is data_tab.btn_add_record
             assert data_tab.get_update_button_widget() is data_tab.btn_update_record
             assert data_tab.get_delete_button_widget() is data_tab.btn_delete_record
-            assert data_tab.get_qr_button_widget() is data_tab.btn_qr_scan
             assert data_tab.get_treeview_widget() is data_tab.preview_tree
             assert data_tab.get_table_frame() is data_tab.table_frame
             assert data_tab.get_preview_frame() is data_tab.preview_frame
@@ -227,7 +228,6 @@ class TestSidebarAndDataTabAccessors:
             assert data_tab.get_refresh_preview_button() is data_tab.btn_refresh_preview
 
             # DataTab Property aliases
-            assert data_tab.qr_scan_btn is data_tab.btn_qr_scan
             assert data_tab.add_btn is data_tab.btn_add_record
             assert data_tab.update_btn is data_tab.btn_update_record
             assert data_tab.delete_btn is data_tab.btn_delete_record
@@ -280,13 +280,15 @@ class TestReExportAndControllerIntegration:
         # Build simulated main app composite
         sidebar = SidebarPanel(tk_root, controller)
         data_tab = DataTabPanel(tk_root, controller)
+        qr_tab = QRScanTabPanel(tk_root, controller)
 
         class AppContainer:
-            def __init__(self, s, d):
+            def __init__(self, s, d, q):
                 self.sidebar = s
                 self.data_tab = d
+                self.qr_tab = q
 
-        app = AppContainer(sidebar, data_tab)
+        app = AppContainer(sidebar, data_tab, qr_tab)
         tk_root.update_idletasks()
 
         try:
@@ -295,8 +297,8 @@ class TestReExportAndControllerIntegration:
 
             # Verify step 1 getter returns sidebar's excel import button
             assert steps[0].target_widget_getter() is sidebar.excel_import_button
-            # Verify step 2 getter returns sidebar's qr button
-            assert steps[1].target_widget_getter() is sidebar.qr_scan_button
+            # Verify step 2 getter returns the dedicated QR scan tab panel
+            assert steps[1].target_widget_getter() is qr_tab.scan_panel
             # Verify step 3 getter returns data_tab form frame or add button
             assert steps[2].target_widget_getter() in (data_tab.form_frame, data_tab.btn_add_record)
             # Verify step 4 getter returns sidebar generate button
@@ -304,4 +306,5 @@ class TestReExportAndControllerIntegration:
         finally:
             sidebar.destroy()
             data_tab.destroy()
+            qr_tab.destroy()
             state.po_registry.close()

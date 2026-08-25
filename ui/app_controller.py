@@ -187,10 +187,6 @@ class AppController:
         if self.view:
             self.view.append_log("Đã điền dữ liệu mẫu; PO sẽ được tự sinh khi thêm dòng.")
 
-    def fill_lot_spaces(self) -> None:
-        self.app_state.lot_var.set("")
-        self.app_state.status_var.set("Ngày/Lot để trống sẽ được chuyển thành 10 dấu cách khi tạo QR.")
-
     def sync_total_qty(self, *_args) -> None:
         try:
             total_qty = calculate_total_qty(self.app_state.carton_qty_var.get(), self.app_state.box_var.get())
@@ -212,9 +208,9 @@ class AppController:
         if not item_name:
             raise ValueError("Bạn chưa nhập Tên hàng.")
         if not carton_qty:
-            raise ValueError("Bạn chưa nhập Số lượng thùng.")
+            raise ValueError("Bạn chưa nhập SL/thùng.")
         if not box:
-            raise ValueError("Bạn chưa nhập Số box.")
+            raise ValueError("Bạn chưa nhập Số thùng.")
         validate_revision(rev)
 
         po_detail = self.app_state.po_detail_var.get().strip()
@@ -257,9 +253,9 @@ class AppController:
             if not item_name:
                 raise ValueError("Bạn chưa nhập Tên hàng.")
             if not carton_qty:
-                raise ValueError("Bạn chưa nhập Số lượng thùng.")
+                raise ValueError("Bạn chưa nhập SL/thùng.")
             if not box_input:
-                raise ValueError("Bạn chưa nhập Số box.")
+                raise ValueError("Bạn chưa nhập Số thùng.")
             validate_revision(rev)
 
             boxes = expand_box_sequence(box_input)

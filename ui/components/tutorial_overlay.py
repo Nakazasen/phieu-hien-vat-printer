@@ -452,6 +452,8 @@ class InteractiveTutorialOverlay:
         self._configure_timer_id: Optional[str] = None
         self._bound_events: list[tuple[str, str]] = []
 
+        self.overlay_win: Optional[tk.Toplevel] = None
+        self.tooltip_win: Optional[tk.Toplevel] = None
         self.canvas: Optional[tk.Canvas] = None
         self.tooltip: Optional[TooltipCard] = None
 
@@ -488,18 +490,27 @@ class InteractiveTutorialOverlay:
         self._render_current_step()
 
     def _build_overlay(self) -> None:
-        """Create and place the scrim Canvas and TooltipCard on the master window."""
-        if self.canvas is not None or getattr(self, "overlay_win", None) is not None:
+        """Create and place the scrim window and the opaque tooltip window."""
+        if (
+            self.canvas is not None
+            or self.overlay_win is not None
+            or self.tooltip_win is not None
+        ):
             self._cleanup_widgets()
 
-        # 1. Full-window Toplevel Overlay (Windows native semi-transparency)
+        # 1. Full-window Scrim Toplevel.
+        # Perf (low-end PCs): NO window alpha and NO topmost. An alpha-blended
+        # full-screen layered window forces the DWM to recomposite every frame
+        # (and -topmost fights the whole system z-order), which froze the app
+        # for seconds on weak machines. A solid scrim + color-key cutout keeps
+        # the spotlight effect at a fraction of the rendering cost.
         self.overlay_win = tk.Toplevel(self.master)
         self.overlay_win.overrideredirect(True)
-        self.overlay_win.attributes("-alpha", 0.75)
+        self.overlay_win.transient(self.master)
         # "magenta" will be our transparent cutout color
         self.overlay_win.attributes("-transparentcolor", "magenta")
         self.overlay_win.configure(bg="magenta")
-        
+
         # Match master window geometry
         self._sync_overlay_geometry()
 
@@ -520,30 +531,61 @@ class InteractiveTutorialOverlay:
         ):
             self.canvas.bind(event_name, lambda e: "break")
 
-        # 2. Tooltip Card (now placed on the overlay window so it can be clicked)
+        # 2. Opaque Tooltip Window: a plain (non-layered) toplevel — no
+        # transparentcolor, no alpha — so repaints are native and cheap.
+        # The window background matches the card fill so the rounded corners
+        # blend seamlessly.
+        card_color = self._current_card_color()
+        self.tooltip_win = tk.Toplevel(self.master)
+        self.tooltip_win.overrideredirect(True)
+        self.tooltip_win.transient(self.master)
+        self.tooltip_win.configure(bg=card_color)
+        self.tooltip_win.withdraw()
+
         self.tooltip = TooltipCard(
-            self.overlay_win,
+            self.tooltip_win,
             width=PlacementEngine.CARD_WIDTH,
             height=PlacementEngine.CARD_HEIGHT,
+            bg_color=card_color,
             on_next=self.next_step,
             on_prev=self.prev_step,
             on_skip=self.skip,
         )
-        # Note: CTk widgets on a Toplevel with transparentcolor might render strangely if they contain the transparent color, but magenta is safe.
-        
+        self.tooltip.pack(fill="both", expand=True)
+
         # Disable the main window to trap focus and prevent clicking through the transparent hole
         try:
             self.master.attributes("-disabled", True)
         except Exception:
             pass
 
+    @staticmethod
+    def _current_card_color() -> str:
+        """Resolve the tooltip card fill color for the active appearance mode."""
+        try:
+            return "#FFFFFF" if str(ctk.get_appearance_mode()).lower() == "light" else "#1E293B"
+        except Exception:  # noqa: BLE001
+            return "#1E293B"
+
     def _sync_overlay_geometry(self) -> None:
-        if getattr(self, "overlay_win", None) and self.overlay_win.winfo_exists():
+        if self.overlay_win is not None and self.overlay_win.winfo_exists():
             w = self.master.winfo_width()
             h = self.master.winfo_height()
             x = self.master.winfo_rootx()
             y = self.master.winfo_rooty()
             self.overlay_win.geometry(f"{w}x{h}+{x}+{y}")
+
+    def _place_tooltip_window(self, pos_x: int, pos_y: int) -> None:
+        """Position the fully-opaque tooltip window relative to the master client area."""
+        if self.tooltip_win is None or not self.tooltip_win.winfo_exists():
+            return
+        x = self.master.winfo_rootx() + int(pos_x)
+        y = self.master.winfo_rooty() + int(pos_y)
+        self.tooltip_win.geometry(
+            f"{PlacementEngine.CARD_WIDTH}x{PlacementEngine.CARD_HEIGHT}+{x}+{y}"
+        )
+        if self.tooltip_win.state() != "normal":
+            self.tooltip_win.deiconify()
 
     def _bind_events(self) -> None:
         """Register keyboard navigation shortcuts and window resize listener."""
@@ -683,14 +725,15 @@ class InteractiveTutorialOverlay:
             preferred_position=step.tooltip_position,
         )
 
-        self.tooltip.place(
-            x=pos_x,
-            y=pos_y,
-        )
+        self._place_tooltip_window(pos_x, pos_y)
 
-        # Ensure overlay and tooltip stay on top
+        # Ensure overlay and tooltip stay above the master window (no -topmost:
+        # raising once per render is cheap and does not fight the system z-order)
+        if self.overlay_win is not None and self.overlay_win.winfo_exists():
+            tk.Misc.lift(self.overlay_win)
         tk.Misc.lift(self.canvas)
-        tk.Misc.lift(self.tooltip)
+        if self.tooltip_win is not None and self.tooltip_win.winfo_exists():
+            tk.Misc.lift(self.tooltip_win)
 
     def _draw_scrim_and_spotlight(self, bounds: Optional[tuple[int, int, int, int]]) -> None:
         """Draws the 4-Rectangle dark scrim cutout and multi-stroke Emerald glow border."""
@@ -847,12 +890,19 @@ class InteractiveTutorialOverlay:
                 pass
             self.canvas = None
 
-        if getattr(self, "overlay_win", None) is not None:
+        if self.overlay_win is not None:
             try:
                 self.overlay_win.destroy()
             except Exception:
                 pass
             self.overlay_win = None
+
+        if self.tooltip_win is not None:
+            try:
+                self.tooltip_win.destroy()
+            except Exception:
+                pass
+            self.tooltip_win = None
 
         try:
             self.master.attributes("-disabled", False)

@@ -17,6 +17,7 @@ from core.runtime_paths import prepare_runtime_paths
 from core.slip_printer_engine import (
     SlipRecord,
     ensure_layout_config_file,
+    generate_preview_image,
     load_layout_config,
 )
 from ui.app_controller import APP_TITLE, AppController
@@ -24,7 +25,9 @@ from ui.app_state import AppState
 from ui.components.data_tab import DataTabPanel
 from ui.components.history_tab import HistoryTabPanel
 from ui.components.layout_tab import LayoutTabPanel
+from ui.components.qr_scan_tab import QRScanTabPanel
 from ui.components.sidebar import SidebarPanel
+from ui.preview_renderer import AsyncPreviewRenderer
 
 ctk.set_default_color_theme("green")
 
@@ -62,6 +65,18 @@ class SlipPrinterApp(ctk.CTk):
         # 2. Xây dựng UI
         self._build_layout()
 
+        # 2.1. Bộ kết xuất xem trước bất đồng bộ (debounce + cache + background thread)
+        # Giữ UI thread luôn rảnh → không còn giật/vỡ hình trên máy yếu.
+        self._preview_renderer = AsyncPreviewRenderer(
+            self,
+            generate_preview_image,
+            zoom=1.45,
+            on_error=self._on_preview_error,
+        )
+
+        # Cờ "bẩn" cho tab Lịch sử: chỉ truy vấn DB khi dữ liệu thực sự thay đổi
+        self._history_dirty = False
+
         # 3. Setup sau khi render
         self.protocol("WM_DELETE_WINDOW", self.controller.on_close)
         self._drain_job = self.after(150, self._drain_event_queue)
@@ -85,6 +100,11 @@ class SlipPrinterApp(ctk.CTk):
                 except Exception:
                     pass
                 self._tutorial_overlay = None
+            if hasattr(self, "_preview_renderer") and self._preview_renderer is not None:
+                try:
+                    self._preview_renderer.cancel()
+                except Exception:
+                    pass
             if hasattr(self, "app_state") and hasattr(self.app_state, "po_registry"):
                 self.app_state.po_registry.close()
         except Exception:  # noqa: BLE001
@@ -197,6 +217,11 @@ class SlipPrinterApp(ctk.CTk):
         self.history_tab = HistoryTabPanel(self.notebook, self.controller, corner_radius=0)
         self.notebook.add(self.history_tab, text="📊 Lịch sử Đăng ký EDI")
         self.history_tab.refresh_history()
+        self._history_dirty = False
+
+        # Tab QR Scan (gom 2 nút Quét QR cũ vào 1 tab riêng cạnh Lịch sử Đăng ký EDI)
+        self.qr_tab = QRScanTabPanel(self.notebook, self.controller, corner_radius=0)
+        self.notebook.add(self.qr_tab, text="📷 Quét QR")
 
         # Tự động nạp lại khi chuyển tab
         self.notebook.bind("<<NotebookTabChanged>>", self._on_notebook_tab_changed)
@@ -237,40 +262,51 @@ class SlipPrinterApp(ctk.CTk):
         self.data_tab.set_records(select_index=self.app_state.selected_record_index if self.app_state.records else None)
 
     def refresh_preview_image(self) -> None:
-        # AppController relies on state.records and layout configuration
-        # but the generation of the image is handled by AppController and set to AppState.
-        # However, generate_preview_image is in slip_printer_engine, and requires record.
-        # In the original code, this logic was complex. Let's rebuild it briefly here.
+        # Async pipeline: heavy PDF render runs off the UI thread (see AsyncPreviewRenderer).
+        # Cached results apply instantly; fresh renders are debounced and applied when done.
         if not self.app_state.records:
             self.app_state.preview_source_image = None
-            self.data_tab.preview_image_label.configure(text="Chưa có dữ liệu để xem trước", image=None)
+            self.data_tab.reset_preview_display()
+            self.data_tab.preview_image_label.configure(text="Chưa có dữ liệu để xem trước")
             self.data_tab.set_qr_payload_text("")
             return
 
         template_path = Path(self.app_state.template_var.get())
         if not template_path.is_file():
             self.app_state.preview_source_image = None
-            self.data_tab.preview_image_label.configure(text="Chưa chọn PDF mẫu hợp lệ", image=None)
+            self.data_tab.reset_preview_display()
+            self.data_tab.preview_image_label.configure(text="Chưa chọn PDF mẫu hợp lệ")
             return
 
         record_index = min(self.app_state.selected_record_index, len(self.app_state.records) - 1)
         record = self.app_state.records[record_index]
-        from core.slip_printer_engine import generate_preview_image
-        try:
-            self.app_state.preview_source_image = generate_preview_image(
-                record,
-                template_path,
-                self.app_state.layout_config,
-                zoom=1.45,
-            )
-        except Exception as exc:  # noqa: BLE001
-            self.app_state.preview_source_image = None
-            self.data_tab.preview_image_label.configure(text=f"Lỗi render preview:\n{exc}", image=None)
-            self.append_log(f"Lỗi preview: {exc}")
-            return
 
-        self.data_tab.set_qr_payload_text(record.qr_payload)
-        self.update_preview_display()
+        def _on_ready(image, _rec=record, _idx=record_index) -> None:
+            # Stale guard: drop results for a selection that has since changed
+            records = self.app_state.records
+            if _idx >= len(records) or records[_idx] is not _rec:
+                return
+            self.app_state.preview_source_image = image
+            self.data_tab.set_qr_payload_text(_rec.qr_payload)
+            self.update_preview_display()
+
+        renderer = getattr(self, "_preview_renderer", None)
+        if renderer is None:
+            renderer = AsyncPreviewRenderer(
+                self,
+                generate_preview_image,
+                zoom=1.45,
+                on_error=self._on_preview_error,
+            )
+            self._preview_renderer = renderer
+
+        renderer.request(record, template_path, self.app_state.layout_config, on_ready=_on_ready)
+
+    def _on_preview_error(self, message: str) -> None:
+        self.app_state.preview_source_image = None
+        self.data_tab.reset_preview_display()
+        self.data_tab.preview_image_label.configure(text=f"Lỗi render preview:\n{message}")
+        self.append_log(f"Lỗi preview: {message}")
 
     def update_preview_display(self) -> None:
         self.data_tab.update_preview_display()
@@ -280,12 +316,18 @@ class SlipPrinterApp(ctk.CTk):
 
     def refresh_history(self) -> None:
         self.history_tab.refresh_history()
+        self._history_dirty = False
 
     def _on_notebook_tab_changed(self, event) -> None:
         try:
             selected_tab = event.widget.tab(event.widget.select(), "text")
             if "Lịch sử" in selected_tab:
-                self.history_tab.refresh_history()
+                # Chỉ truy vấn DB khi dữ liệu thực sự thay đổi (dirty flag)
+                # → chuyển tab luôn mượt, không lag ngay cả trên máy yếu.
+                if getattr(self, "_history_dirty", True):
+                    self.refresh_history()
+            elif "Quét QR" in selected_tab:
+                self.qr_tab.focus_scan_entry()
         except Exception:  # noqa: BLE001
             pass
 
@@ -318,7 +360,7 @@ class SlipPrinterApp(ctk.CTk):
                 self.app_state.status_var.set(f"Hoàn tất. Đã tạo {record_count} tem trên {a4_page_count} trang A4.")
                 self.app_state.output_name_var.set(self.app_state._default_output_name())
                 self.append_log(f"Hoàn tất: {output_path}")
-                self.refresh_history()
+                self._history_dirty = True
                 messagebox.showinfo(
                     APP_TITLE,
                     f"🎉 TẠO FILE PDF THÀNH CÔNG!\n\n"

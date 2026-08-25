@@ -20,6 +20,7 @@ from ui.app_controller import AppController
 from ui.app_state import AppState
 from ui.components.data_tab import DataTabPanel
 from ui.components.layout_tab import LayoutTabPanel
+from ui.components.qr_scan_tab import QRScanTabPanel
 from ui.components.sidebar import SidebarPanel
 from ui.components.tutorial_overlay import (
     GeometryHelper,
@@ -59,14 +60,21 @@ def tk_root():
 class TestTab0SynchronizationAndWalkthrough:
     """Stress tests for tab 0 synchronization across all 4 walkthrough steps."""
 
-    def test_all_4_steps_explicitly_target_tab_0(self):
-        """Verify that every step returned by build_tutorial_steps specifies target_tab_index == 0."""
+    def test_all_4_steps_explicit_target_tab_indexes(self):
+        """Verify canonical target tabs: all steps on tab 0 except the QR step on its dedicated tab 3."""
+        expected_by_id = {
+            "step_excel_import": 0,
+            "step_qr_scanner": 3,
+            "step_auto_po": 0,
+            "step_pdf_generation": 0,
+        }
         for app_input in (None, object(), MagicMock()):
             steps = build_tutorial_steps(app_input)
             assert len(steps) == 4, f"Expected exactly 4 steps, got {len(steps)}"
             for idx, step in enumerate(steps):
-                assert step.target_tab_index == 0, (
-                    f"Step {idx} ({step.step_id}) has target_tab_index={step.target_tab_index}, expected 0"
+                expected = expected_by_id[step.step_id]
+                assert step.target_tab_index == expected, (
+                    f"Step {idx} ({step.step_id}) has target_tab_index={step.target_tab_index}, expected {expected}"
                 )
 
     def test_walkthrough_synchronizes_tab_from_non_zero_start(self, tk_root):
@@ -102,15 +110,22 @@ class TestTab0SynchronizationAndWalkthrough:
         finally:
             overlay.destroy()
 
-    def test_walkthrough_navigation_across_all_4_steps_maintains_tab_0(self, tk_root):
-        """Verify complete forward and backward walkthrough maintains Tab 0 even if tampered."""
+    def test_walkthrough_navigation_across_all_4_steps_maintains_expected_tabs(self, tk_root):
+        """Verify complete forward and backward walkthrough recovers the expected tab even if tampered.
+
+        Tab map: steps 1/3/4 -> tab 0; step 2 (QR scanner) -> dedicated tab 3.
+        """
         notebook = ttk.Notebook(tk_root)
         notebook.place(x=0, y=0, width=800, height=600)
 
         tab0 = ctk.CTkFrame(notebook)
         tab1 = ctk.CTkFrame(notebook)
+        tab2 = ctk.CTkFrame(notebook)
+        tab3 = ctk.CTkFrame(notebook)
         notebook.add(tab0, text="Tab 0")
         notebook.add(tab1, text="Tab 1")
+        notebook.add(tab2, text="Tab 2")
+        notebook.add(tab3, text="Tab 3")
         tk_root.update_idletasks()
         tk_root.update()
 
@@ -118,18 +133,21 @@ class TestTab0SynchronizationAndWalkthrough:
         overlay = InteractiveTutorialOverlay(master_window=tk_root, notebook=notebook)
         overlay.register_steps(steps)
 
+        expected_tab_for_step = {0: 0, 1: 3, 2: 0, 3: 0}
+
+        def _render_and_assert(step_idx: int) -> None:
+            tk_root.update_idletasks()
+            tk_root.update()
+            assert overlay.current_step_index == step_idx
+            assert notebook.index(notebook.select()) == expected_tab_for_step[step_idx]
+
         try:
             overlay.start(0)
-            tk_root.update_idletasks()
-            tk_root.update()
-            assert notebook.index(notebook.select()) == 0
+            _render_and_assert(0)
 
-            # Step 1 -> Step 2
+            # Step 1 -> Step 2 (QR tab)
             overlay.next_step()
-            tk_root.update_idletasks()
-            tk_root.update()
-            assert overlay.current_step_index == 1
-            assert notebook.index(notebook.select()) == 0
+            _render_and_assert(1)
 
             # Simulate external tamper: switch notebook to Tab 1
             notebook.select(1)
@@ -137,20 +155,14 @@ class TestTab0SynchronizationAndWalkthrough:
 
             # Step 2 -> Step 3: Must auto-recover to Tab 0
             overlay.next_step()
-            tk_root.update_idletasks()
-            tk_root.update()
-            assert overlay.current_step_index == 2
-            assert notebook.index(notebook.select()) == 0
+            _render_and_assert(2)
 
             # Tamper again to Tab 1
             notebook.select(1)
 
             # Step 3 -> Step 4: Must auto-recover to Tab 0
             overlay.next_step()
-            tk_root.update_idletasks()
-            tk_root.update()
-            assert overlay.current_step_index == 3
-            assert notebook.index(notebook.select()) == 0
+            _render_and_assert(3)
 
             # Navigate backward: Step 4 -> Step 3 -> Step 2 -> Step 1
             for expected_idx in (2, 1, 0):
@@ -159,7 +171,7 @@ class TestTab0SynchronizationAndWalkthrough:
                 tk_root.update_idletasks()
                 tk_root.update()
                 assert overlay.current_step_index == expected_idx
-                assert notebook.index(notebook.select()) == 0
+                assert notebook.index(notebook.select()) == expected_tab_for_step[expected_idx]
         finally:
             overlay.destroy()
 
@@ -441,13 +453,17 @@ class TestFullAppTutorialIntegration:
         data_tab = DataTabPanel(data_tab_frame, controller)
         data_tab.pack(fill="both", expand=True)
 
+        qr_tab = QRScanTabPanel(notebook, controller)
+        notebook.add(qr_tab, text="Quét QR")
+
         class LiveAppComposite:
-            def __init__(self, s, d, nb):
+            def __init__(self, s, d, nb, q):
                 self.sidebar = s
                 self.data_tab = d
                 self.notebook = nb
+                self.qr_tab = q
 
-        app_composite = LiveAppComposite(sidebar, data_tab, notebook)
+        app_composite = LiveAppComposite(sidebar, data_tab, notebook, qr_tab)
         tk_root.update_idletasks()
         tk_root.update()
 
@@ -476,7 +492,7 @@ class TestFullAppTutorialIntegration:
 
             assert overlay.current_step_index == 1
             target2 = steps[1].target_widget_getter()
-            assert target2 is sidebar.qr_scan_button
+            assert target2 is qr_tab.scan_panel
             assert overlay.tooltip.badge_label.cget("text") == "Bước 2 / 4"
             assert "QR" in overlay.tooltip.title_label.cget("text")
 
