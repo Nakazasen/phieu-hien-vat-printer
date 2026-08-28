@@ -58,8 +58,8 @@ class DataTabPanel(ctk.CTkFrame):
         ).pack(side="right")
 
         # Hàng 1: Mã hàng (*) | Tên hàng (*)
-        self._form_field(form_frame, 1, 0, "Mã hàng (*):", self.app_state.item_code_var)
-        self._form_field(form_frame, 1, 2, "Tên hàng (*):", self.app_state.item_name_var)
+        self._form_field(form_frame, 1, 0, "Mã hàng (*):", self.app_state.item_code_var, uppercase=True)
+        self._form_field(form_frame, 1, 2, "Tên hàng (*):", self.app_state.item_name_var, uppercase=True)
 
         # Hàng 2: SL/thùng(*) | Tổng số lượng (tự tính)
         self._form_field(form_frame, 2, 0, "SL/thùng(*):", self.app_state.carton_qty_var)
@@ -190,7 +190,7 @@ class DataTabPanel(ctk.CTkFrame):
         self.preview_tree.tag_configure("duplicate", background="#FEE2E2", foreground="#991B1B")
 
         # ==========================================
-        # PANEL PHẢI: XEM TRƯỚC TRANG IN & MÃ QR
+        # PANEL PHẢI: XEM TRƯỚC TEM EDI & MÃ QR
         # ==========================================
         self.preview_frame = ctk.CTkFrame(self, corner_radius=12)
         preview_frame = self.preview_frame
@@ -198,7 +198,7 @@ class DataTabPanel(ctk.CTkFrame):
         preview_frame.grid_rowconfigure(1, weight=1)
         preview_frame.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(preview_frame, text="🔍 Xem trước trang in", font=ctk.CTkFont(size=15, weight="bold")).grid(
+        ctk.CTkLabel(preview_frame, text="🔍 Xem trước tem in", font=ctk.CTkFont(size=15, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=14, pady=(10, 6)
         )
 
@@ -233,7 +233,7 @@ class DataTabPanel(ctk.CTkFrame):
 
     def _form_field(
         self, parent: ctk.CTkFrame, row: int, column: int, label: str, variable: ctk.StringVar,
-        is_readonly: bool = False, is_disabled: bool = False
+        is_readonly: bool = False, is_disabled: bool = False, uppercase: bool = False
     ) -> ctk.CTkEntry:
         ctk.CTkLabel(parent, text=label, font=ctk.CTkFont(size=11, weight="bold")).grid(
             row=row, column=column, sticky="w", padx=(12, 4), pady=2
@@ -244,7 +244,18 @@ class DataTabPanel(ctk.CTkFrame):
             entry.configure(state="readonly")
         elif is_disabled:
             entry.configure(state="disabled")
+        else:
+            entry.bind("<FocusOut>", lambda _event: self._normalize_form_value(variable, uppercase), add="+")
         return entry
+
+    @staticmethod
+    def _normalize_form_value(variable: ctk.StringVar, uppercase: bool = False) -> None:
+        """Remove pasted outer whitespace; upper-case the two EDI identification fields."""
+        normalized = variable.get().strip()
+        if uppercase:
+            normalized = normalized.upper()
+        if normalized != variable.get():
+            variable.set(normalized)
 
     def set_records(self, select_index: int | None = None) -> None:
         for item in self.preview_tree.get_children():

@@ -3,7 +3,7 @@
 ; Cài bộ ứng dụng onedir theo phiên bản; máy đích không cần cài Python.
 
 #define AppName "In Phiếu Hiện Vật"
-#define AppVersion "0.1.1"
+#define AppVersion "0.1.2"
 #define AppPublisher "KDTVN"
 #define AppId "{{CEBD9EDE-12C7-4E8A-BD6D-67FC0F3D3F43}}"
 #define LauncherExe "InPhieuHienVat_Launcher.exe"

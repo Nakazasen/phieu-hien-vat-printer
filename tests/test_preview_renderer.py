@@ -6,7 +6,7 @@ import time
 
 from PIL import Image
 
-from core.slip_printer_engine import create_record
+from core.slip_printer_engine import EDI_TEMPLATE_CROP, create_record, generate_preview_image, get_default_layout_config
 from ui.preview_renderer import AsyncPreviewRenderer
 
 
@@ -195,3 +195,16 @@ def test_cancel_stops_pending_work(tk_root):
 
     assert calls == []
     assert applied == []
+
+
+def test_generate_preview_image_renders_the_edi_label_region():
+    """The preview must crop the EDI label from the landscape template, not tiled A4."""
+    record = _make_record()
+
+    image = generate_preview_image(record, "template.pdf", get_default_layout_config(), zoom=1.45)
+
+    expected_width = int(EDI_TEMPLATE_CROP.width * 1.45)
+    expected_height = int(EDI_TEMPLATE_CROP.height * 1.45)
+    assert abs(image.width - expected_width) <= 2
+    assert abs(image.height - expected_height) <= 2
+    assert any(low < 250 for low, _high in image.getextrema())

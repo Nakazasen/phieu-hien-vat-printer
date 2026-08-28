@@ -43,6 +43,34 @@ def test_normalize_lot():
     assert normalize_lot("Lot123") == "Lot123"
 
 
+def test_create_record_trims_values_and_uppercases_edi_identity_fields():
+    from core.slip_printer_engine import create_record
+
+    record = create_record(
+        row_number=1,
+        item_code="  part-abc-01  ",
+        item_name="  Hook fuser release r  ",
+        carton_qty="  20  ",
+        total_qty="ignored",
+        po="  1126082501  ",
+        po_detail="  00010  ",
+        po_sub="  +001  ",
+        box="  1 / 2  ",
+        rev="  01  ",
+        lot="  lot-01  ",
+    )
+
+    assert record.item_code == "PART-ABC-01"
+    assert record.item_name == "HOOK FUSER RELEASE R"
+    assert record.carton_qty == "20"
+    assert record.po == "1126082501"
+    assert record.po_detail == "00010"
+    assert record.po_sub == "+001"
+    assert record.box == "001/002"
+    assert record.rev == "01"
+    assert record.lot == "lot-01"
+
+
 def test_normalize_box():
     from core.slip_printer_engine import normalize_box
     assert normalize_box("1") == "001/001"

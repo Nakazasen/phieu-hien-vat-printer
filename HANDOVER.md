@@ -455,6 +455,14 @@ Không xóa `%LOCALAPPDATA%\InPhieuHienVatData` hoặc output khi uninstall. `po
 
 Installer dùng `compiler:Default.isl`, không phụ thuộc `Vietnamese.isl` vì gói ngôn ngữ này không có trong mọi máy compiler. Ứng dụng đã cài vẫn là giao diện tiếng Việt.
 
+#### Lưu trữ bộ cài cũ
+
+Trước khi đưa bộ cài `.exe` mới vào thư mục phát hành, chuyển các file `InPhieuHienVat_Setup_*.exe` của các bản cũ vào:
+
+`\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\old`
+
+Giữ nguyên tên chứa version để không ghi đè bản lịch sử; sau khi chuyển, kiểm tra file đích có đủ kích thước và hash trước khi xóa bản nguồn.
+
 ### 12.4 Tạo và publish update LAN
 
 Chỉ người được ủy quyền mới được ghi vào folder publish. Ví dụ một share đã được kiểm soát quyền:
@@ -464,6 +472,14 @@ python package_app.py --build-update --min-app-version 0.1.0 --publish-dir '\\se
 ```
 
 Lệnh tạo `InPhieuHienVat-<version>.phieuupdate`, copy/verify artifact rồi publish `latest.json` sau cùng bằng file tạm + replace. Không copy đè package hoặc `latest.json` thủ công.
+
+#### Lưu trữ gói update cũ
+
+Sau khi package mới và `latest.json` mới đã được publish, xác minh thành công, chuyển các file `InPhieuHienVat-*.phieuupdate` của các version cũ vào:
+
+`\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\release_update\old`
+
+Không chuyển `latest.json` vào `old`: đây là catalog mà client phải luôn đọc từ thư mục update đang hoạt động. Đường dẫn archive dùng `release_update\old`, thống nhất với thư mục update thực tế; không dùng `release\_update\old`.
 
 Để opt-in ở client, tạo `%LOCALAPPDATA%\InPhieuHienVatData\update_sources.json`:
 
@@ -577,4 +593,6 @@ Vì vậy payload có độ dài `122 + len(Box)`: `001/003` là 129 ký tự; `
 - `app_icon.ico` là icon máy in tem/QR cho cửa sổ, app, launcher và installer; `app_icon_source.png` là nguồn của icon.
 - App tự kiểm tra catalog khi mở từ thư mục update LAN và yêu cầu người dùng xác nhận trước khi cài. Nút **Kiểm tra bản cập nhật** ở góc trên-phải dùng cho kiểm tra thủ công.
 - Thư mục phát hành installer: `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI`.
+- Thư mục lưu bộ cài cũ: `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\old`.
 - Thư mục cập nhật: `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\release_update`.
+- Thư mục lưu package update cũ: `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\release_update\old`.

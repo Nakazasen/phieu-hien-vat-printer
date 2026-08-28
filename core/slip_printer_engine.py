@@ -281,21 +281,25 @@ def create_record(
     rev: object,
     lot: object | None = None,
 ) -> SlipRecord:
-    carton_qty_text = _string_value(carton_qty)
-    normalized_box = normalize_box(box)
+    # Normalize once at the record boundary so pasted/manual, Excel and QR data
+    # all produce the same printable EDI values.
+    item_code_text = _string_value(item_code).strip().upper()
+    item_name_text = _string_value(item_name).strip().upper()
+    carton_qty_text = _string_value(carton_qty).strip()
+    normalized_box = normalize_box(_string_value(box).strip())
     total_qty_text = calculate_total_qty(carton_qty_text, normalized_box)
     record = SlipRecord(
         row_number=row_number,
-        item_code=_string_value(item_code),
-        item_name=_string_value(item_name),
+        item_code=item_code_text,
+        item_name=item_name_text,
         carton_qty=carton_qty_text,
         total_qty=total_qty_text,
-        po=_string_value(po),
-        po_detail=_string_value(po_detail),
-        po_sub=_string_value(po_sub),
+        po=_string_value(po).strip(),
+        po_detail=_string_value(po_detail).strip(),
+        po_sub=_string_value(po_sub).strip(),
         box=normalized_box,
-        rev=_string_value(rev),
-        lot=normalize_lot(lot),
+        rev=_string_value(rev).strip(),
+        lot=normalize_lot(_string_value(lot).strip()),
     )
     return record.with_payload()
 
@@ -936,7 +940,10 @@ def generate_preview_image(
     label floating on a full A4 page. Pass ``clip=None`` to render the full page.
     """
     overlay_buffer = create_overlay_pdf([record.with_payload()], layout_config)
-    merged_pdf_bytes = merge_overlay_with_template_bytes(overlay_buffer, template_pdf_path)
+    # Render the original landscape template page.  The crop coordinates above
+    # are defined in that page's coordinate system; applying them after the
+    # label has been tiled onto portrait A4 leaves only a thin, blank strip.
+    merged_pdf_bytes = _merge_overlay_with_template_pages(overlay_buffer, template_pdf_path)
     return render_pdf_first_page(merged_pdf_bytes, zoom=zoom, clip=clip)
 
 

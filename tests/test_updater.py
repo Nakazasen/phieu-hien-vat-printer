@@ -371,6 +371,42 @@ def test_discover_and_fetch_update(mock_runtime_paths: RuntimePaths, tmp_path: P
     assert sha256_file(downloaded) == digest
 
 
+def test_discovery_defers_package_hash_validation_until_download(mock_runtime_paths: RuntimePaths, tmp_path: Path):
+    """Startup discovery remains fast; an invalid package is rejected before installation."""
+    lan_folder = tmp_path / "lan_updates"
+    lan_folder.mkdir()
+    package_file = lan_folder / "InPhieuHienVat-1.1.0.phieuupdate"
+    package_file.write_bytes(b"tampered update package")
+    (lan_folder / "latest.json").write_text(
+        json.dumps(
+            {
+                "schema": 1,
+                "channel": "stable",
+                "version": "1.1.0",
+                "package": package_file.name,
+                "sha256": "0" * 64,
+                "size": package_file.stat().st_size,
+                "notes": "Package integrity is checked during download.",
+            }
+        ),
+        encoding="utf-8",
+    )
+    save_update_config(
+        mock_runtime_paths,
+        {
+            "schema": 1,
+            "startup_check": True,
+            "sources": [{"type": "folder", "location": str(lan_folder), "enabled": True}],
+        },
+    )
+
+    candidate = discover_update(mock_runtime_paths, current_version="1.0.0")
+
+    assert candidate is not None
+    with pytest.raises(UpdateDeliveryError, match="Hash hoặc kích thước"):
+        fetch_update(mock_runtime_paths, candidate)
+
+
 # ======================================================================
 # Tests for updater.app_updates and update_launcher
 # ======================================================================

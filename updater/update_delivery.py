@@ -114,10 +114,16 @@ def _catalog(value: Any) -> tuple[str, str, int, str, str]:
 
 
 def _discover_from_folder(folder: Path, current_version: str) -> UpdateCandidate | None:
-    """Return a verified update from one source, if it is newer."""
+    """Return a newer catalog candidate without hashing its full package.
+
+    Discovery runs every time the application starts.  Hashing a large update
+    package over a LAN share here can exceed the probe timeout and hide a real
+    update.  ``fetch_update`` performs the full SHA-256 comparison after the
+    user accepts the update and before any staging or activation can occur.
+    """
     package_name, version, size, digest, notes = _catalog(_read_json(folder / "latest.json"))
     package = folder / package_name
-    if package.is_file() and package.stat().st_size == size and sha256_file(package) == digest and _version(version) > _version(current_version):
+    if package.is_file() and package.stat().st_size == size and _version(version) > _version(current_version):
         return UpdateCandidate(version=version, package_path=package, size=size, sha256=digest, notes=notes)
     return None
 
