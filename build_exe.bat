@@ -3,16 +3,29 @@ setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "PYTHON_EXE="
-if exist "%~dp0.venv\Scripts\python.exe" (
-    set "PYTHON_EXE=%~dp0.venv\Scripts\python.exe"
-) else if exist "%~dp0..\.venv\Scripts\python.exe" (
-    set "PYTHON_EXE=%~dp0..\.venv\Scripts\python.exe"
-) else if exist "D:\Sandbox\.venv\Scripts\python.exe" (
-    set "PYTHON_EXE=D:\Sandbox\.venv\Scripts\python.exe"
-) else if exist "%LOCALAPPDATA%\Programs\Python\Python313\python.exe" (
-    set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
-) else (
-    set "PYTHON_EXE=python"
+
+for %%P in (
+    "%~dp0.venv\Scripts\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    "%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    "python"
+    "py"
+    "%~dp0..\.venv\Scripts\python.exe"
+    "D:\Sandbox\.venv\Scripts\python.exe"
+) do (
+    if not defined PYTHON_EXE (
+        %%~P -c "import PyInstaller, customtkinter" >nul 2>&1
+        if not errorlevel 1 (
+            set "PYTHON_EXE=%%~P"
+        )
+    )
+)
+
+if not defined PYTHON_EXE (
+    echo [LOI] Khong tim thay Python co cai dat PyInstaller va cac thu vien can thiet.
+    pause
+    exit /b 1
 )
 
 "!PYTHON_EXE!" package_app.py

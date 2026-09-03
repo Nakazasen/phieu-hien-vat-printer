@@ -1,7 +1,7 @@
 # Handover — In Phiếu Hiện Vật
 
-Ngày cập nhật: `2026-08-24` (Asia/Bangkok)  
-Trạng thái: ứng dụng in phiếu, đóng gói Inno Setup per-user và auto-update qua folder/LAN **đã được hoàn thiện toàn diện, tích hợp Tutorial Overlay, Modal Quét QR 3 chế độ (Phân tách, Hoàn kho, Bóc tách), và bộ kiểm thử tự động pytest 546 items pass 100%**. Kho lưu trữ Git chính thức tại `https://github.com/Nakazasen/phieu-hien-vat-printer`.
+Ngày cập nhật: `2026-09-03` (Asia/Bangkok)  
+Trạng thái: Phiên bản **0.1.3** đã đóng gói và phát hành thành công cả Setup.exe và Gói Auto-update lên 2 thư mục LAN của KDTVN. Tích hợp phôi phiếu EDI 3 ô chữ ký, tài liệu hướng dẫn chuẩn `huongdansetup_autoupdate.md`, launcher thông minh chống xung đột môi trường Python, và toàn bộ test suite pass 100%. Kho lưu trữ Git tại `https://github.com/Nakazasen/phieu-hien-vat-printer`.
 
 ## 1. Mục đích và phạm vi
 

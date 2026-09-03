@@ -67,13 +67,24 @@ def validate_update_config(value: Any) -> dict[str, Any]:
     return {"schema": CONFIG_SCHEMA, "startup_check": value["startup_check"], "sources": sources}
 
 
+def company_policy_config_path() -> Path:
+    program_data = os.environ.get("PROGRAMDATA", "").strip()
+    if program_data:
+        return Path(program_data) / "InPhieuHienVat" / "update_sources.json"
+    return Path(r"C:\ProgramData\InPhieuHienVat\update_sources.json")
+
+
 def load_update_config(paths: RuntimePaths) -> dict[str, Any]:
     default_path = paths.bundle_dir / "update_sources.default.json"
     selected = validate_update_config(_read_json(default_path))
     override = paths.data_dir / "update_sources.json"
     if override.is_file():
         selected = validate_update_config(_read_json(override))
+    policy = company_policy_config_path()
+    if policy.is_file():
+        selected = validate_update_config(_read_json(policy))
     return selected
+
 
 
 def current_release_version(paths: RuntimePaths) -> str:

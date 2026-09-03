@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,10 @@ LAUNCHER_DIST = PROJECT_ROOT / "dist" / LAUNCHER_NAME
 RELEASE_ARTIFACTS = PROJECT_ROOT / "release_artifacts"
 INSTALL_BUNDLE = RELEASE_ARTIFACTS / "install_bundle"
 SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
+
+DEFAULT_LAN_SETUP_DIR = r"\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI"
+DEFAULT_LAN_UPDATE_DIR = r"\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\release_update"
+
 
 
 def _release() -> dict[str, Any]:
@@ -292,22 +297,72 @@ def build_update_package(app_dist: Path, output_path: Path, *, min_app_version: 
     return output_path
 
 
+def verify_writable_share(folder: Path) -> None:
+    """Verify write access on the target LAN share before publishing."""
+    folder.mkdir(parents=True, exist_ok=True)
+    probe_name = f".probe_{os.getpid()}_{int(time.time())}.tmp"
+    probe_file = folder / probe_name
+    try:
+        probe_file.write_text("ok", encoding="utf-8")
+        if probe_file.read_text(encoding="utf-8") != "ok":
+            raise RuntimeError(f"Không thể đọc lại probe file trên LAN: {folder}")
+    except Exception as exc:
+        raise RuntimeError(f"Không có quyền ghi trên thư mục LAN: {folder}") from exc
+    finally:
+        probe_file.unlink(missing_ok=True)
+
+
+def publish_setup(setup_exe: Path, publish_dir: Path) -> Path:
+    """Publish Setup installer (.exe) to the LAN software directory using atomic .part copy."""
+    if not setup_exe.is_file():
+        raise FileNotFoundError(f"Không tìm thấy file Setup để phát hành: {setup_exe}")
+    verify_writable_share(publish_dir)
+    destination = publish_dir / setup_exe.name
+    if destination.is_file():
+        if _sha256(destination) == _sha256(setup_exe):
+            print(f"Setup {setup_exe.name} đã tồn tại trên LAN với hash trùng khớp; bỏ qua copy.")
+            return destination
+        raise RuntimeError(f"Setup {setup_exe.name} đã tồn tại trên LAN nhưng khác hash! Dừng để tránh ghi đè artifact lịch sử.")
+    setup_part = publish_dir / f"{setup_exe.name}.part"
+    try:
+        shutil.copyfile(setup_exe, setup_part)
+        if _sha256(setup_exe) != _sha256(setup_part) or setup_part.stat().st_size != setup_exe.stat().st_size:
+            raise RuntimeError("Hash hoặc kích thước Setup sau khi copy lên LAN không khớp")
+        os.replace(setup_part, destination)
+        if _sha256(destination) != _sha256(setup_exe):
+            raise RuntimeError("Xác minh Setup trên LAN sau khi rename không khớp")
+        return destination
+    except Exception:
+        setup_part.unlink(missing_ok=True)
+        raise
+
+
 def publish_update(package_path: Path, publish_dir: Path, *, notes: str) -> tuple[Path, Path]:
     release = _release()
     if package_path.suffix.casefold() != ".phieuupdate" or not package_path.is_file():
         raise ValueError("Không tìm thấy package .phieuupdate hợp lệ")
     if len(notes) > 2000:
         raise ValueError("Release note dài quá 2000 ký tự")
-    publish_dir.mkdir(parents=True, exist_ok=True)
+    verify_writable_share(publish_dir)
     destination = publish_dir / package_path.name
-    package_part = publish_dir / f"{package_path.name}.part"
+    if destination.is_file():
+        if _sha256(destination) != _sha256(package_path):
+            raise RuntimeError(f"Package {destination.name} đã tồn tại trên LAN nhưng khác hash! Dừng để tránh ghi đè artifact lịch sử.")
+        print(f"Package {package_path.name} đã tồn tại trên LAN với hash trùng khớp.")
+    else:
+        package_part = publish_dir / f"{package_path.name}.part"
+        try:
+            shutil.copyfile(package_path, package_part)
+            if _sha256(package_path) != _sha256(package_part) or package_part.stat().st_size != package_path.stat().st_size:
+                raise RuntimeError("Hash package sau khi copy không khớp")
+            os.replace(package_part, destination)
+        except Exception:
+            package_part.unlink(missing_ok=True)
+            raise
+
     catalog = publish_dir / "latest.json"
     catalog_part = publish_dir / "latest.json.part"
     try:
-        shutil.copyfile(package_path, package_part)
-        if _sha256(package_path) != _sha256(package_part):
-            raise RuntimeError("Hash package sau khi copy không khớp")
-        os.replace(package_part, destination)
         payload = {
             "schema": 1,
             "channel": str(release["channel"]),
@@ -321,7 +376,6 @@ def publish_update(package_path: Path, publish_dir: Path, *, notes: str) -> tupl
         os.replace(catalog_part, catalog)
         return destination, catalog
     except Exception:
-        package_part.unlink(missing_ok=True)
         catalog_part.unlink(missing_ok=True)
         raise
 
@@ -330,7 +384,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Đóng gói In Phiếu Hiện Vật")
     parser.add_argument("--build-update", action="store_true")
     parser.add_argument("--min-app-version")
-    parser.add_argument("--publish-dir")
+    parser.add_argument("--publish-dir", help="Thư mục phát hành package auto-update (.phieuupdate + latest.json)")
+    parser.add_argument("--publish-setup-dir", help="Thư mục phát hành Setup installer (.exe) lên LAN")
+    parser.add_argument("--publish-lan", action="store_true", help="Tự động phát hành cả Setup và Update lên các thư mục LAN chuẩn của KDTVN")
     parser.add_argument("--release-notes", default="")
     parser.add_argument("--compile-installer", action="store_true", help="Chỉ chạy bước biên dịch Inno Setup (.iss)")
     parser.add_argument("--no-installer", action="store_true", help="Bỏ qua bước gọi Inno Setup khi đóng gói")
@@ -343,19 +399,39 @@ def main(argv: list[str] | None = None) -> int:
         compile_installer()
         return 0
     if not args.build_update:
-        package(compile_iss=not args.no_installer)
+        bundle = package(compile_iss=not args.no_installer)
+        if args.publish_lan or args.publish_setup_dir:
+            setup_dir = Path(args.publish_setup_dir or DEFAULT_LAN_SETUP_DIR)
+            release = _release()
+            setup_exe = RELEASE_ARTIFACTS / f"{APP_NAME}_Setup_{release['version']}.exe"
+            if setup_exe.is_file():
+                published_setup = publish_setup(setup_exe, setup_dir)
+                print(f"Đã phát hành Setup lên LAN: {published_setup}")
         return 0
     if not args.min_app_version:
         raise SystemExit("Thiếu --min-app-version khi tạo update")
+    bundle = package(compile_iss=not args.no_installer)
     release = _release()
     output = RELEASE_ARTIFACTS / f"{APP_NAME}-{release['version']}.phieuupdate"
     artifact = build_update_package(APP_DIST, output, min_app_version=args.min_app_version)
     print(f"Đã tạo gói cập nhật: {artifact}")
-    if args.publish_dir:
-        published, catalog = publish_update(artifact, Path(args.publish_dir), notes=args.release_notes)
-        print(f"Đã phát hành gói: {published}")
+
+    update_dir = Path(args.publish_dir or (DEFAULT_LAN_UPDATE_DIR if args.publish_lan else "")) if (args.publish_dir or args.publish_lan) else None
+    if update_dir:
+        published, catalog = publish_update(artifact, update_dir, notes=args.release_notes)
+        print(f"Đã phát hành gói cập nhật: {published}")
         print(f"Đã phát hành catalog: {catalog}")
+
+    setup_dir = Path(args.publish_setup_dir or (DEFAULT_LAN_SETUP_DIR if args.publish_lan else "")) if (args.publish_setup_dir or args.publish_lan) else None
+    if setup_dir:
+        setup_exe = RELEASE_ARTIFACTS / f"{APP_NAME}_Setup_{release['version']}.exe"
+        if not setup_exe.is_file():
+            compile_installer()
+        if setup_exe.is_file():
+            published_setup = publish_setup(setup_exe, setup_dir)
+            print(f"Đã phát hành Setup lên LAN: {published_setup}")
     return 0
+
 
 
 if __name__ == "__main__":
