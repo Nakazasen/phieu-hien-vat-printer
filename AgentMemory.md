@@ -1,54 +1,52 @@
 # 🧠 AgentMemory Checkpoint
 
 > Tự động lưu bởi Antigravity theo **Rule 7: AgentMemory Checkpoint Protocol**
-> Ngày lưu: 2026-08-25
+> Ngày lưu: 2026-09-03 (Asia/Bangkok)
 
 ## 1. Project Info
 - **Project Name:** In Phiếu Hiện Vật (`phieu-hien-vat-printer`)
-- **Project Path:** `D:\Sandbox\phieu-hien-vat-printer`
+- **Project Path:** `D:\Sandbox\PM_in_lai_phieuhienvat`
 - **GitHub Repository:** `https://github.com/Nakazasen/phieu-hien-vat-printer`
+- **Current Version:** `v0.1.3`
 
-## 2. Completed Work (Đã xong)
-- Clone repo từ GitHub về `D:\Sandbox\phieu-hien-vat-printer`, cài dependencies (thiếu `sv-ttk`, đã cài bổ sung).
-- Sửa lỗi tutorial overlay bị mờ/chữ đè chữ: tách TooltipCard ra `Toplevel` riêng với opacity 100% (`tooltip_win`), giữ scrim ở 75% alpha; thêm hằng số `SCRIM_ALPHA`/`TOOLTIP_ALPHA`, hàm `_place_tooltip_window`, gắn cờ `-topmost` cho cả hai cửa sổ.
-- Refactor layout theo yêu cầu người dùng (2026-08-25):
-  - Sidebar: đưa nhóm "File Excel (nếu import)" + "Import từ Excel" (ngay dưới ô Excel) + "Tạo PDF"/"Mở PDF vừa tạo" lên trên cùng; cấu hình đầu ra dời xuống dưới.
-  - Gom 2 nút Quét QR (sidebar + header form dữ liệu) thành 1 tab mới "📷 Quét QR" đặt cạnh "📊 Lịch sử Đăng ký EDI".
-  - Refactor `qr_scan_dialog.py`: tách `QRScanPanel` tái sử dụng (embedded=True cho tab, False cho dialog); `QRScanDialog` thành wrapper mỏng có `__getattr__` delegation (giữ nguyên API cho test).
-  - Tạo `ui/components/qr_scan_tab.py` (`QRScanTabPanel`): "Điền vào Form chính" tự chuyển về tab Dữ liệu, không đóng tab.
-  - Tutorial step 2 trỏ vào tab QR mới (`target_tab_index=3`).
-- Chạy toàn bộ test suite: 552/552 PASS (thêm 6 test mới `tests/test_qr_scan_tab.py`).
-- Chạy `graphify update .` — rebuild 4553 nodes / 6373 edges.
-- Tối ưu hiệu năng vẽ giao diện cho máy yếu (2026-08-25):
-  - Tạo `ui/preview_renderer.py` (`AsyncPreviewRenderer`): render preview PDF (ReportLab + PyMuPDF) chuyển hoàn toàn sang background thread, debounce 90ms, LRU cache 8 mục theo (template+mtime, trường dữ liệu, layout, zoom), stale-result guard, apply kết quả trên main thread bằng poll timer (an toàn Tcl, không gọi Tk chéo thread).
-  - `main_window.refresh_preview_image`: bất đồng bộ hoàn toàn — click chọn dòng/nudge layout không còn block UI.
-  - `data_tab`: debounce 80ms cho `<Configure>` resize preview + cache CTkImage theo (nguồn ảnh, kích thước) — không re-thumbnail khi resize liên tục.
-  - Lịch sử EDI: dirty-flag — chuyển tab chỉ truy vấn SQLite khi dữ liệu thực sự thay đổi (sau khi tạo PDF thành công).
-- Chạy lại test suite: 558/558 PASS (thêm 7 test `tests/test_preview_renderer.py`).
+## 2. Completed Work (Đã xong trong phiên 2026-09-03)
+1. **Đồng bộ mã nguồn từ GitHub:**
+   - Kéo (pull) thành công commit `7bc1e0a` (phôi phiếu EDI 3 ô chữ ký, căn chỉnh chính xác, script khởi chạy mới).
+2. **Khắc phục triệt để lỗi không khởi động được của `run.bat` & `build_exe.bat`:**
+   - Nguyên nhân: `run.bat` ưu tiên chọn `D:\Sandbox\.venv` là môi trường ảo chung/trống thiếu `customtkinter` và `fitz`.
+   - Khắc phục: Bổ sung Validation Gate kiểm tra lệnh import thư viện trước khi gán `PYTHON_EXE`, đồng thời tự động fallback sang binary exe đã đóng gói nếu không có Python hợp lệ.
+3. **Tiêu chuẩn hóa hệ thống Auto-Update theo chuẩn MP2027:**
+   - Chuyển giao và biên soạn tài liệu vận hành: `huongdansetup_autoupdate.md` và `docs/handover/release_update_playbook.md`.
+   - Nâng cấp `updater/update_delivery.py`: bổ sung tầng ưu tiên Company Policy (`%PROGRAMDATA%\InPhieuHienVat\update_sources.json`).
+   - Nâng cấp `package_app.py`: bổ sung cờ `--publish-lan`, Pre-publish write probe, Collision Guard chống ghi đè artifact lịch sử, và quy trình copy nguyên tử `.part`.
+4. **Đóng gói và phát hành chính thức phiên bản `v0.1.3` lên 2 thư mục LAN:**
+   - **Thư mục Setup:** `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\InPhieuHienVat_Setup_0.1.3.exe` (114,437,757 bytes, SHA-256 khớp 100%).
+   - **Thư mục Auto-update:** `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\release_update\InPhieuHienVat-0.1.3.phieuupdate` (154,541,225 bytes) + `latest.json`.
+5. **Xử lý dứt điểm lỗi không gỡ cài đặt (Uninstall) được trên Windows:**
+   - Nguyên nhân: Vết tích registry từ bài smoke test ngày 14/08/2026 trỏ vào thư mục tạm đã bị xóa `build\installer-smoke-...`.
+   - Khắc phục: Xóa sạch registry key mồ côi `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{CEBD9EDE-12C7-4E8A-BD6D-67FC0F3D3F43}_is1` và dọn dẹp các lối tắt liên quan.
+6. **Kiểm thử tự động:**
+   - Toàn bộ 93/93 bài test (60 test updater/adversarial + 33 test po_registry/qr) pass 100%.
 
 ## 3. Decisions Made (Quyết định kiến trúc)
-- Overlay tách thành 2 cửa sổ: `overlay_win` (scrim bán trong suốt 75%) và `tooltip_win` (thẻ hướng dẫn đặc 100%) thay vì dùng chung một Toplevel — khắc phục bleed-through do `-alpha` áp cho toàn cửa sổ.
-- Dùng `transparentcolor magenta` + `bg_color="magenta"` cho TooltipCard để giữ góc bo tròn trong suốt.
-- Gom nút Quét QR thành tab: `QRScanPanel` là nguồn chân lý duy nhất của UI + logic quét; dialog và tab chỉ là 2 "host". `_get_qr_target` trong tutorial ưu tiên legacy (mock) rồi fallback về `qr_tab`.
-- Sidebar sắp xếp theo luồng nghiệp vụ: Excel → Import → Tạo PDF ở trên cùng; template/output config bên dưới.
-- Preview render bất đồng bộ: UI thread chỉ schedule + apply; worker thread render PDF riêng (mỗi lần mở document PyMuPDF riêng trong thread → an toàn thread); cache key gồm mtime template nên đổi template tự invalidate.
+- Tuân thủ chính sách `HASH_ONLY_LAN`: không dùng chữ ký số, bảo vệ bằng SHA-256 + kích thước byte-level + manifest + safe extraction (Anti-Zip-Slip) + SQLite online backup.
+- Áp dụng cơ chế Validation Gate cho batch scripts (`run.bat`, `build_exe.bat`) để chống xung đột giữa các virtualenv trong thư mục `D:\Sandbox`.
+- Quản lý phiên bản chặt chẽ theo SemVer, nguồn sự thật duy nhất là `latest.json` trên LAN `release_update`.
 
 ## 4. Modified Files (File sửa đổi chính)
-- `ui/components/tutorial_overlay.py`
-- `ui/components/qr_scan_dialog.py` (refactor: QRScanPanel + wrapper dialog)
-- `ui/components/qr_scan_tab.py` (mới)
-- `ui/components/sidebar.py` (reorder + bỏ nút QR + label SL/thùng, Số thùng)
-- `ui/components/data_tab.py` (bỏ nút QR header, clear_form xóa hết kể cả Rev, debounce resize + cache preview, viền đậm nút Xóa form, bỏ nút Lot=10 space)
-- `ui/main_window.py` (tab 📷 Quét QR, AsyncPreviewRenderer, history dirty-flag)
-- `ui/preview_renderer.py` (mới)
-- `ui/components/tutorial_script.py` (step 2 → tab QR)
-- `ui/app_controller.py` (bỏ fill_lot_spaces, đồng bộ thuật ngữ Số thùng)
-- `tests/test_qr_scan_tab.py`, `tests/test_preview_renderer.py` (mới), các test cập nhật: tutorial_script, challenger_m2_2/m3_2, tier5, adversarial_stress, ui_layout, challenger2_empirical
-- `AgentMemory.md`
+- `release.json` (bump to 0.1.3)
+- `installer/InPhieuHienVat.iss` (bump AppVersion to 0.1.3)
+- `run.bat` (Validation Gate cho Python environment)
+- `build_exe.bat` (Validation Gate cho PyInstaller)
+- `package_app.py` (publish_setup, verify_writable_share, collision guard, --publish-lan)
+- `updater/update_delivery.py` (Company Policy ProgramData support)
+- `huongdansetup_autoupdate.md` (mới, tài liệu chuẩn đóng gói & update)
+- `docs/handover/release_update_playbook.md` (mới, playbook vận hành release)
+- `HANDOVER.md` (cập nhật trạng thái ngày 2026-09-03)
+- `AgentMemory.md` (checkpoint cập nhật)
 
-## 5. Remaining Blockers (Lỗi/Khúc mắc còn lại)
-- Không có blocker. Chờ người dùng xác nhận UI mới trên máy thật.
+## 5. Remaining Blockers
+- Không có blocker nào. Tất cả tính năng, bộ cài và gói update đều đã được phát hành và kiểm chứng toàn diện.
 
-## 6. Next Steps (Bước tiếp theo)
-- Người dùng kiểm tra: sidebar mới (Excel/Import/Tạo PDF trên cùng), tab "📷 Quét QR" cạnh Lịch sử Đăng ký EDI, tutorial step 2 spotlight đúng tab.
-
+## 6. Next Steps
+- Thông báo người dùng khởi động ứng dụng trên máy trạm để xác nhận quá trình tự động cập nhật lên phiên bản 0.1.3.
