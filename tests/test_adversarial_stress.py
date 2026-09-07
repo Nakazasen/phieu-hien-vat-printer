@@ -316,7 +316,7 @@ def test_data_entry_max_length_and_special_characters(tk_root):
         data_tab._select_tree_row(1)
         root.update_idletasks()
         root.update()
-        assert state.item_name_var.get() == STRESS_STRINGS["xml_injection"]
+        assert state.item_name_var.get() == STRESS_STRINGS["xml_injection"].upper()
 
         violations = _check_no_zero_or_negative_geometry(data_tab, "StressRecords_Selected")
         assert not violations, f"Stress records caused geometry violations: {violations}"

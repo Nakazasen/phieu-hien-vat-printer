@@ -371,8 +371,8 @@ class QRScanPanel(ctk.CTkFrame):
 
         self.item_code_var.set(parsed.item_code)
         self.item_name_var.set(item_name)
-        self.carton_qty_var.set(parsed.carton_qty)
         self.box_var.set(parsed.box)
+        self.carton_qty_var.set(parsed.carton_qty)
         self.total_qty_var.set(parsed.total_qty)
         self.rev_var.set(parsed.rev)
         self.po_var.set(parsed.po)
@@ -531,9 +531,9 @@ class QRScanPanel(ctk.CTkFrame):
         first = records[0]
         self.app_state.item_code_var.set(first.item_code)
         self.app_state.item_name_var.set(first.item_name)
+        self.app_state.box_var.set(self.box_var.get().strip())
         self.app_state.carton_qty_var.set(first.carton_qty)
         self.app_state.total_qty_var.set(first.total_qty)
-        self.app_state.box_var.set(self.box_var.get().strip())
         self.app_state.rev_var.set(first.rev)
         self.app_state.po_var.set(first.po)
         self.app_state.po_detail_var.set(first.po_detail)

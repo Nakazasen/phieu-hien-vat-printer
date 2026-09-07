@@ -1,7 +1,7 @@
 # 🧠 AgentMemory Checkpoint
 
 > Tự động lưu bởi Antigravity theo **Rule 7: AgentMemory Checkpoint Protocol**
-> Ngày lưu: 2026-09-03 (Asia/Bangkok)
+> Ngày lưu: 2026-09-07 (Asia/Bangkok)
 
 ## 1. Project Info
 - **Project Name:** In Phiếu Hiện Vật (`phieu-hien-vat-printer`)
@@ -9,44 +9,33 @@
 - **GitHub Repository:** `https://github.com/Nakazasen/phieu-hien-vat-printer`
 - **Current Version:** `v0.1.3`
 
-## 2. Completed Work (Đã xong trong phiên 2026-09-03)
-1. **Đồng bộ mã nguồn từ GitHub:**
-   - Kéo (pull) thành công commit `7bc1e0a` (phôi phiếu EDI 3 ô chữ ký, căn chỉnh chính xác, script khởi chạy mới).
-2. **Khắc phục triệt để lỗi không khởi động được của `run.bat` & `build_exe.bat`:**
-   - Nguyên nhân: `run.bat` ưu tiên chọn `D:\Sandbox\.venv` là môi trường ảo chung/trống thiếu `customtkinter` và `fitz`.
-   - Khắc phục: Bổ sung Validation Gate kiểm tra lệnh import thư viện trước khi gán `PYTHON_EXE`, đồng thời tự động fallback sang binary exe đã đóng gói nếu không có Python hợp lệ.
-3. **Tiêu chuẩn hóa hệ thống Auto-Update theo chuẩn MP2027:**
-   - Chuyển giao và biên soạn tài liệu vận hành: `huongdansetup_autoupdate.md` và `docs/handover/release_update_playbook.md`.
-   - Nâng cấp `updater/update_delivery.py`: bổ sung tầng ưu tiên Company Policy (`%PROGRAMDATA%\InPhieuHienVat\update_sources.json`).
-   - Nâng cấp `package_app.py`: bổ sung cờ `--publish-lan`, Pre-publish write probe, Collision Guard chống ghi đè artifact lịch sử, và quy trình copy nguyên tử `.part`.
-4. **Đóng gói và phát hành chính thức phiên bản `v0.1.3` lên 2 thư mục LAN:**
-   - **Thư mục Setup:** `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\InPhieuHienVat_Setup_0.1.3.exe` (114,437,757 bytes, SHA-256 khớp 100%).
-   - **Thư mục Auto-update:** `\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\release_update\InPhieuHienVat-0.1.3.phieuupdate` (154,541,225 bytes) + `latest.json`.
-5. **Xử lý dứt điểm lỗi không gỡ cài đặt (Uninstall) được trên Windows:**
-   - Nguyên nhân: Vết tích registry từ bài smoke test ngày 14/08/2026 trỏ vào thư mục tạm đã bị xóa `build\installer-smoke-...`.
-   - Khắc phục: Xóa sạch registry key mồ côi `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{CEBD9EDE-12C7-4E8A-BD6D-67FC0F3D3F43}_is1` và dọn dẹp các lối tắt liên quan.
-6. **Kiểm thử tự động:**
-   - Toàn bộ 93/93 bài test (60 test updater/adversarial + 33 test po_registry/qr) pass 100%.
+## 2. Completed Work (Đã xong trong phiên 2026-09-07)
+1. **Khắc phục lỗi lệch 10 lần số lượng (Fixed-Point 9.3 Standard):**
+   - Phân tích và đối soát với 11 tem mẫu thực tế từ nhà cung cấp Kyocera EDI.
+   - Nguyên nhân: Code cũ ngộ nhận trường 12 ký tự số lượng gồm 8 số nguyên + 4 số 0 cố định (nhân/chia 10,000), dẫn đến quét tem 2400 pcs bị đọc thành 240 pcs, và in tem 2400 pcs bị phóng đại thành 24,000 pcs.
+   - Khắc phục: Chuẩn hóa trường 12 ký tự sang định dạng fixed-point 9.3 (`value * 1000`, 12 số zero-padded). 2400 pcs -> `000002400000`, 4800 pcs -> `000004800000`. Bổ sung kiểm tra tràn số `>= 10**12`.
+2. **Tách biệt 2 cụm số lượng trong mã QR 129 ký tự:**
+   - Cụm 1 (index 23:35): Format `total_qty` (Tổng số lượng toàn đơn).
+   - Cụm 2 (index 60:72): Format `carton_qty` (Số lượng thực tế trong từng thùng), chấm dứt hoàn toàn lỗi lặp lại `total_qty`.
+3. **Nâng cấp bộ giải mã QR (`parse_qr_payload`):**
+   - Đọc trực tiếp `total_qty` và `carton_qty` từ 2 vị trí độc lập, chia cho 1000.
+   - Hỗ trợ fallback tương thích ngược cho tem cũ in lặp số lượng (`multiplier > 1 and raw_carton_qty == raw_total_qty`).
+   - Xử lý mượt mà số lượng có dấu phân cách hàng nghìn (dấu phẩy `,`).
+4. **Cập nhật UI Quét QR (`ui/components/qr_scan_dialog.py`):**
+   - Đổi thứ tự gán biến UI: gán `box_var` trước `total_qty_var` để tránh race condition từ trace callback `sync_total_qty`.
+5. **Kiểm thử tự động:**
+   - 40/40 test QR/Engine pass 100%.
+   - 564/565 test toàn project pass 100% (1 test skipped có chủ đích).
+   - Đối soát khớp 100% byte-for-byte với 4 tem mẫu thực tế từ nhà cung cấp.
 
 ## 3. Decisions Made (Quyết định kiến trúc)
-- Tuân thủ chính sách `HASH_ONLY_LAN`: không dùng chữ ký số, bảo vệ bằng SHA-256 + kích thước byte-level + manifest + safe extraction (Anti-Zip-Slip) + SQLite online backup.
-- Áp dụng cơ chế Validation Gate cho batch scripts (`run.bat`, `build_exe.bat`) để chống xung đột giữa các virtualenv trong thư mục `D:\Sandbox`.
-- Quản lý phiên bản chặt chẽ theo SemVer, nguồn sự thật duy nhất là `latest.json` trên LAN `release_update`.
+- Tuân thủ chặt chẽ chuẩn Kyocera EDI fixed-point 9.3 (scaled by 1000).
+- Không cho phép số lượng âm hoặc vượt quá 999,999,999.999 (bảo vệ cấu trúc 129 ký tự của QR).
+- Hỗ trợ tương thích ngược thông minh khi quét lại các tem cũ in sai để tự động tính lại số lượng thùng.
 
-## 4. Modified Files (File sửa đổi chính)
-- `release.json` (bump to 0.1.3)
-- `installer/InPhieuHienVat.iss` (bump AppVersion to 0.1.3)
-- `run.bat` (Validation Gate cho Python environment)
-- `build_exe.bat` (Validation Gate cho PyInstaller)
-- `package_app.py` (publish_setup, verify_writable_share, collision guard, --publish-lan)
-- `updater/update_delivery.py` (Company Policy ProgramData support)
-- `huongdansetup_autoupdate.md` (mới, tài liệu chuẩn đóng gói & update)
-- `docs/handover/release_update_playbook.md` (mới, playbook vận hành release)
-- `HANDOVER.md` (cập nhật trạng thái ngày 2026-09-03)
-- `AgentMemory.md` (checkpoint cập nhật)
-
-## 5. Remaining Blockers
-- Không có blocker nào. Tất cả tính năng, bộ cài và gói update đều đã được phát hành và kiểm chứng toàn diện.
-
-## 6. Next Steps
-- Thông báo người dùng khởi động ứng dụng trên máy trạm để xác nhận quá trình tự động cập nhật lên phiên bản 0.1.3.
+## 4. Modified Files
+- `core/slip_printer_engine.py` (format_string_qty, build_qr_payload, parse_qr_payload, calculate_total_qty)
+- `ui/components/qr_scan_dialog.py` (thứ tự gán box_var và total_qty_var)
+- `HANDOVER.md` (cập nhật hợp đồng QR 129 ký tự và ví dụ chuẩn từ nhà cung cấp)
+- `tests/test_engine.py`, `tests/test_qr_operations.py`, `tests/test_qr_scan_tab.py`, `tests/test_adversarial_stress.py`, `tests/test_ui_layout.py`
+- `AgentMemory.md`

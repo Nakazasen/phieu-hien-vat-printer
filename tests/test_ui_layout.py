@@ -54,7 +54,7 @@ def test_datatab_layout_and_responsive_height(tk_root):
         
         # 2. Verify form fields populated correctly
         assert state.item_code_var.get() == "CODE-1"
-        assert state.item_name_var.get() == "Product 1"
+        assert state.item_name_var.get() == "PRODUCT 1"
         assert state.carton_qty_var.get() == "10"
         
         # 3. Simulate Maximize

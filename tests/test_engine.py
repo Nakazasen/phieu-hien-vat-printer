@@ -12,6 +12,7 @@ def test_calculate_total_qty():
     assert calculate_total_qty("10", "001/003") == "30"
     assert calculate_total_qty("10.5", "002/002") == "21"
     assert calculate_total_qty("5", "004") == "20"
+    assert calculate_total_qty("2,400", "001/002") == "4800"
     
     with pytest.raises(ValueError):
         calculate_total_qty("-5", "002")
@@ -33,9 +34,21 @@ def test_validate_revision():
         validate_revision("100")
 
 def test_format_string_qty():
-    assert format_string_qty(1) == "000000010000"
-    assert format_string_qty(180) == "000001800000"
-    assert format_string_qty("25") == "000000250000"
+    assert format_string_qty(1) == "000000001000"
+    assert format_string_qty(180) == "000000180000"
+    assert format_string_qty("25") == "000000025000"
+    assert format_string_qty(2400) == "000002400000"
+    assert format_string_qty(4800) == "000004800000"
+    assert format_string_qty(90) == "000000090000"
+    assert format_string_qty(900) == "000000900000"
+    assert format_string_qty("10.5") == "000000010500"
+    assert format_string_qty("2,400") == "000002400000"
+
+    with pytest.raises(ValueError, match="không được âm"):
+        format_string_qty(-1)
+
+    with pytest.raises(ValueError, match="vượt quá giới hạn"):
+        format_string_qty(1_000_000_000)
 
 def test_normalize_lot():
     assert normalize_lot(None) == "          "
@@ -143,7 +156,7 @@ def test_qr_payload_129_standard_compliance():
     assert len(prefix) == 122
     assert len(suffix) == 7
     assert suffix == "001/003"
-    assert prefix.startswith("112602110100010+001    0000006000003W2ND25350 01            000000600000")
+    assert prefix.startswith("112602110100010+001    0000000600003W2ND25350 01            000000020000")
 
 
 def test_qr_payload_roundtrip_parsing():

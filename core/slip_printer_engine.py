@@ -243,7 +243,7 @@ def calculate_total_qty(carton_qty: object, box: object) -> str:
     A Box value of ``001/003`` represents three boxes, so the multiplier is
     the segment after the last slash. A plain numeric Box value is also valid.
     """
-    carton_text = _string_value(carton_qty).strip()
+    carton_text = _string_value(carton_qty).strip().replace(",", "")
     box_text = _string_value(box).strip()
     multiplier_text = box_text.rsplit("/", 1)[-1].strip()
 
@@ -285,7 +285,7 @@ def create_record(
     # all produce the same printable EDI values.
     item_code_text = _string_value(item_code).strip().upper()
     item_name_text = _string_value(item_name).strip().upper()
-    carton_qty_text = _string_value(carton_qty).strip()
+    carton_qty_text = _string_value(carton_qty).strip().replace(",", "")
     normalized_box = normalize_box(_string_value(box).strip())
     total_qty_text = calculate_total_qty(carton_qty_text, normalized_box)
     record = SlipRecord(
@@ -400,13 +400,27 @@ def update_layout_item(
 
 
 def format_string_qty(value: object) -> str:
-    """Format quantity as the 12-character field used by Kyocera EDI QR.
+    """Format quantity as the 12-character fixed-point (9.3) field used by Kyocera EDI QR.
 
-    The reference printer writes an 8-digit integer followed by four literal
-    zeroes: 1 -> ``000000010000`` and 180 -> ``000001800000``.
+    Values are scaled by 1000 and padded with leading zeros to 12 digits:
+    f"{int(round(float(value) * 1000)):012d}".
+    Example: 2400 -> "000002400000", 4800 -> "000004800000",
+             90 -> "000000090000", 900 -> "000000900000", 1 -> "000000001000".
     """
-    formatted_value = f"{int(float(value)):08d}"
-    return f"{formatted_value[-8:]}0000"
+    if value is None:
+        numeric = 0.0
+    else:
+        text = str(value).strip().replace(",", "")
+        if not text:
+            numeric = 0.0
+        else:
+            numeric = float(text)
+    scaled = int(round(numeric * 1000))
+    if scaled < 0:
+        raise ValueError(f"Số lượng không được âm: {value}")
+    if scaled >= 10**12:
+        raise ValueError(f"Số lượng vượt quá giới hạn 12 chữ số (tối đa 999,999,999.999): {value}")
+    return f"{scaled:012d}"
 
 
 def format_string_part(item_code: object, rev_value: object) -> str:
@@ -437,9 +451,9 @@ def build_qr_payload(record: SlipRecord) -> str:
     Structure (129 chars total):
     - 19 chars: PO (10) + PO detail (5) + PO sub (4)
     - 4 chars: Space (4)
-    - 12 chars: Total Qty (8 digits + 0000)
+    - 12 chars: Total Qty (fixed-point 9.3: value * 1000, 12 digits zero-padded)
     - 25 chars: Item code & Rev (padded to 25)
-    - 12 chars: Total Qty repeated (8 digits + 0000)
+    - 12 chars: Carton Qty (fixed-point 9.3: value * 1000, 12 digits zero-padded)
     - 26 chars: Lot (padded to 26)
     - 24 chars: Space (24)
     - 7 chars: Box (001/003)
@@ -449,13 +463,14 @@ def build_qr_payload(record: SlipRecord) -> str:
     space_4 = " " * 4
     formatted_total_qty = format_string_qty(record.total_qty)
     formatted_part = format_string_part(record.item_code, record.rev)
+    formatted_carton_qty = format_string_qty(record.carton_qty)
     formatted_lot = format_string_lot(record.lot)
     space_24 = " " * 24
     formatted_box = format_string_box(record.box)
 
     return (
         f"{po_field}{space_4}{formatted_total_qty}{formatted_part}"
-        f"{formatted_total_qty}{formatted_lot}{space_24}{formatted_box}"
+        f"{formatted_carton_qty}{formatted_lot}{space_24}{formatted_box}"
     )
 
 
@@ -473,6 +488,22 @@ class QRParsedData:
     raw_payload: str
 
 
+def _parse_scaled_qty(segment: str) -> str | None:
+    """Parse a 12-char fixed-point (9.3) quantity segment scaled by 1000."""
+    clean = segment.strip().replace(",", "")
+    if not clean:
+        return None
+    try:
+        val = Decimal(int(clean)) / Decimal(1000)
+        if val <= 0:
+            return None
+        if val == val.to_integral_value():
+            return str(int(val))
+        return format(val.normalize(), "f").rstrip("0").rstrip(".")
+    except Exception:
+        return None
+
+
 def parse_qr_payload(payload: str) -> QRParsedData:
     """Parse and extract structured fields from a 122+ or 129-char QR code payload."""
     clean_payload = payload.strip("\r\n")
@@ -485,16 +516,9 @@ def parse_qr_payload(payload: str) -> QRParsedData:
     po_detail = clean_payload[10:15].strip() or FIXED_PO_DETAIL
     po_sub = clean_payload[15:19].strip() or FIXED_PO_SUB
 
-    # Total quantity at 23..35 (12 chars: 8 digits + 0000)
-    qty_segment = clean_payload[23:35].strip()
-    try:
-        if len(qty_segment) >= 8:
-            val = int(qty_segment[:8])
-        else:
-            val = int(qty_segment)
-        total_qty = str(val) if val > 0 else "1"
-    except ValueError:
-        total_qty = "1"
+    # Total quantity at 23..35 (12 chars: fixed-point 9.3 scaled by 1000)
+    qty_segment = clean_payload[23:35]
+    raw_total_qty = _parse_scaled_qty(qty_segment)
 
     # Item code and Rev at 35..60 (25 chars)
     part_rev_str = clean_payload[35:60].strip()
@@ -508,6 +532,10 @@ def parse_qr_payload(payload: str) -> QRParsedData:
 
     if not (len(rev) == 2 and rev.isdigit() and int(rev) > 0):
         rev = "01"
+
+    # Carton quantity at 60..72 (12 chars: fixed-point 9.3 scaled by 1000)
+    carton_segment = clean_payload[60:72]
+    raw_carton_qty = _parse_scaled_qty(carton_segment)
 
     # Lot at 72..98 (26 chars)
     lot_segment = clean_payload[72:98].strip()
@@ -525,20 +553,54 @@ def parse_qr_payload(payload: str) -> QRParsedData:
         except Exception:
             box = "001/001"
 
-    # Calculate carton_qty
-    try:
-        if "/" in box:
+    # Resolve carton_qty and total_qty with robust fallback and legacy reconciliation
+    multiplier = 1
+    if "/" in box:
+        try:
             multiplier = int(box.rsplit("/", 1)[-1])
-            total_val = Decimal(total_qty)
-            carton_val = total_val / Decimal(multiplier)
-            if carton_val == carton_val.to_integral_value():
-                carton_qty = str(int(carton_val))
-            else:
-                carton_qty = format(carton_val.normalize(), "f").rstrip("0").rstrip(".")
+        except Exception:
+            multiplier = 1
+
+    if raw_carton_qty is not None and raw_total_qty is not None:
+        total_qty = raw_total_qty
+        # Legacy compatibility: if an older QR repeated total_qty in the carton_qty slot for multi-box
+        if multiplier > 1 and raw_carton_qty == raw_total_qty:
+            try:
+                carton_val = Decimal(total_qty) / Decimal(multiplier)
+                if carton_val == carton_val.to_integral_value():
+                    carton_qty = str(int(carton_val))
+                else:
+                    carton_qty = format(carton_val.normalize(), "f").rstrip("0").rstrip(".")
+            except Exception:
+                carton_qty = raw_carton_qty
         else:
+            carton_qty = raw_carton_qty
+    elif raw_carton_qty is None and raw_total_qty is not None:
+        total_qty = raw_total_qty
+        try:
+            if multiplier > 1:
+                carton_val = Decimal(total_qty) / Decimal(multiplier)
+                if carton_val == carton_val.to_integral_value():
+                    carton_qty = str(int(carton_val))
+                else:
+                    carton_qty = format(carton_val.normalize(), "f").rstrip("0").rstrip(".")
+            else:
+                carton_qty = total_qty
+        except Exception:
             carton_qty = total_qty
-    except Exception:
-        carton_qty = total_qty
+    elif raw_total_qty is None and raw_carton_qty is not None:
+        carton_qty = raw_carton_qty
+        try:
+            total_qty = calculate_total_qty(carton_qty, box)
+        except Exception:
+            total_qty = carton_qty
+    else:
+        # Both fields missing/invalid: default to 1 carton unit, compute total_qty from box
+        carton_qty = "1"
+        try:
+            total_qty = calculate_total_qty(carton_qty, box)
+        except Exception:
+            total_qty = "1"
 
     return QRParsedData(
         po=po,

@@ -137,12 +137,12 @@ def test_qr_payload_exact_129_characters_and_122_prefix():
     assert payload[0:19] == "112602110100010+001"
     # 19..23 (Space 4): "    "
     assert payload[19:23] == "    "
-    # 23..35 (Total Qty 12): 000000600000
-    assert payload[23:35] == "000000600000"
+    # 23..35 (Total Qty 12): 000000060000
+    assert payload[23:35] == "000000060000"
     # 35..60 (Part & Rev 25): "3W2ND25350 01            "
     assert payload[35:60] == "3W2ND25350 01            "
-    # 60..72 (Total Qty repeat 12): 000000600000
-    assert payload[60:72] == "000000600000"
+    # 60..72 (Carton Qty 12): 000000020000
+    assert payload[60:72] == "000000020000"
     # 72..98 (Lot 26): 26 spaces
     assert payload[72:98] == " " * 26
     # 98..122 (Space 24): 24 spaces
@@ -153,7 +153,7 @@ def test_qr_payload_exact_129_characters_and_122_prefix():
 
 def test_qr_decode_roundtrip_accuracy():
     sample_qr = (
-        "112602110100010+001    0000006000003W2ND25350 01            000000600000"
+        "112602110100010+001    0000000600003W2ND25350 01            000000020000"
         "LOT12345                  "
         "                        "
         "002/003"
@@ -220,7 +220,7 @@ def test_qr_scan_dialog_split_workflow(tk_root):
 
         # 1. Simulate gun scan with a reference 129-char QR code
         sample_qr = (
-            "112602110100010+001    0000006000003W2ND25350 01            000000600000"
+            "112602110100010+001    0000000600003W2ND25350 01            000000020000"
             "                          "
             "                        "
             "001/003"
@@ -282,7 +282,7 @@ def test_qr_scan_dialog_return_workflow(tk_root):
 
         # Scan code
         sample_qr = (
-            "112608189910010+001    0000004000003V2ND00160 02            000000400000"
+            "112608189910010+001    0000000400003V2ND00160 02            000000020000"
             "LOT-RETURN                "
             "                        "
             "001/002"
@@ -316,7 +316,7 @@ def test_qr_scan_dialog_return_workflow(tk_root):
 def test_parse_qr_payload_122_character_legacy():
     # 122-char QR (prefix without 7-char box suffix)
     legacy_qr = (
-        "112608188800010+001    000000500000ITEM-LEGACY 03           000000500000"
+        "112608188800010+001    000000050000ITEM-LEGACY 03           000000050000"
         "                          "
         "                        "
     )
@@ -334,7 +334,7 @@ def test_parse_qr_payload_122_character_legacy():
 
 def test_parse_qr_payload_scanner_crlf_and_lf():
     raw_129 = (
-        "112608180100010+001    0000008000003W2ND25350 01            000000800000"
+        "112608180100010+001    0000000800003W2ND25350 01            000000020000"
         "LOT999                    "
         "                        "
         "002/004"
@@ -369,7 +369,7 @@ def test_qr_scan_dialog_apply_to_main_form(tk_root):
         dialog._on_mode_button_changed("Phân tách (分割)")
 
         sample_qr = (
-            "112608185500010+001    0000004000003V2ND00160 01            000000400000"
+            "112608185500010+001    0000000400003V2ND00160 01            000000020000"
             "LOT-SPLIT                 "
             "                        "
             "001/002"
@@ -440,7 +440,7 @@ def test_auto_fill_po_multi_box_series_grouping(memory_registry):
 def test_parse_qr_payload_non_numeric_revision_fallback():
     # Construct QR with invalid/non-numeric rev "XX" and "00"
     base_122 = (
-        "112608180100010+001    000000200000PART-ABC-99 XX           000000200000"
+        "112608180100010+001    000000020000PART-ABC-99 XX           000000020000"
         + " " * 26
         + " " * 24
     )
@@ -450,7 +450,7 @@ def test_parse_qr_payload_non_numeric_revision_fallback():
 
     # Rev "00" (invalid) falls back to "01"
     base_zero_rev = (
-        "112608180100010+001    000000200000PART-ABC-99 00           000000200000"
+        "112608180100010+001    000000020000PART-ABC-99 00           000000020000"
         + " " * 26
         + " " * 24
     )
@@ -460,7 +460,7 @@ def test_parse_qr_payload_non_numeric_revision_fallback():
 
 def test_parse_qr_payload_malformed_box_fallback():
     base_122 = (
-        "112608180100010+001    000000200000PART-ABC-99 02           000000200000"
+        "112608180100010+001    000000020000PART-ABC-99 02           000000020000"
         + " " * 26
         + " " * 24
     )
@@ -516,7 +516,7 @@ def test_qr_scan_dialog_split_limit_graceful_handling(tk_root):
 
         # Now simulate scanning QR with this PO
         sample_qr = (
-            f"{po:<10}00010+001    000000200000PART-ABC-99 01           000000200000"
+            f"{po:<10}00010+001    000000020000PART-ABC-99 01           000000020000"
             + " " * 26
             + " " * 24
             + "001/001"
@@ -531,3 +531,114 @@ def test_qr_scan_dialog_split_limit_graceful_handling(tk_root):
         dialog.destroy()
     finally:
         state.po_registry.close()
+
+
+def test_supplier_reference_qr_contract():
+    """Verify exact char-for-char parsing and reconstruction of supplier reference QR code."""
+    raw_supplier_qr = (
+        "130602404900010+001    0000048000003V2ND25480 03            "
+        "0000024000002026-05-09                                        001/002"
+    )
+    assert len(raw_supplier_qr) == 129
+    parsed = parse_qr_payload(raw_supplier_qr)
+
+    assert parsed.po == "1306024049"
+    assert parsed.po_detail == "00010"
+    assert parsed.po_sub == "+001"
+    assert parsed.total_qty == "4800"
+    assert parsed.item_code == "3V2ND25480"
+    assert parsed.rev == "03"
+    assert parsed.carton_qty == "2400"
+    assert parsed.lot == "2026-05-09"
+    assert parsed.box == "001/002"
+
+    rec = create_record(
+        row_number=1,
+        item_code=parsed.item_code,
+        item_name="PARTS NAME",
+        carton_qty=parsed.carton_qty,
+        total_qty=parsed.total_qty,
+        po=parsed.po,
+        po_detail=parsed.po_detail,
+        po_sub=parsed.po_sub,
+        box=parsed.box,
+        rev=parsed.rev,
+        lot=parsed.lot,
+    )
+    built = build_qr_payload(rec)
+    assert built == raw_supplier_qr
+
+
+def test_parse_qr_payload_fallback_missing_quantities():
+    """Verify fallback when one or both quantity fields are missing or spaces."""
+    raw_supplier_qr = (
+        "130602404900010+001    0000048000003V2ND25480 03            "
+        "0000024000002026-05-09                                        001/002"
+    )
+
+    # 1. Carton qty is spaces: falls back to total_qty / box multiplier (4800 / 2 = 2400)
+    qr_no_carton = raw_supplier_qr[:60] + (" " * 12) + raw_supplier_qr[72:]
+    parsed_carton_missing = parse_qr_payload(qr_no_carton)
+    assert parsed_carton_missing.total_qty == "4800"
+    assert parsed_carton_missing.carton_qty == "2400"
+
+    # 2. Total qty is spaces: falls back to carton_qty * box multiplier (2400 * 2 = 4800)
+    qr_no_total = raw_supplier_qr[:23] + (" " * 12) + raw_supplier_qr[35:]
+    parsed_total_missing = parse_qr_payload(qr_no_total)
+    assert parsed_total_missing.total_qty == "4800"
+    assert parsed_total_missing.carton_qty == "2400"
+
+    # 3. Both quantities missing on multi-box (001/003): carton defaults to 1, total to 3
+    qr_no_both_3 = (
+        "130602404900010+001    "
+        + (" " * 12)
+        + "3V2ND25480 03            "
+        + (" " * 12)
+        + "2026-05-09                                        "
+        + "001/003"
+    )
+    parsed_both_3 = parse_qr_payload(qr_no_both_3)
+    assert parsed_both_3.carton_qty == "1"
+    assert parsed_both_3.total_qty == "3"
+    assert "/" not in parsed_both_3.carton_qty
+    assert "." not in parsed_both_3.carton_qty
+
+    # 4. Both quantities missing on single box (001/001): both default to 1
+    qr_no_both_1 = (
+        "130602404900010+001    "
+        + (" " * 12)
+        + "3V2ND25480 03            "
+        + (" " * 12)
+        + "2026-05-09                                        "
+        + "001/001"
+    )
+    parsed_both_1 = parse_qr_payload(qr_no_both_1)
+    assert parsed_both_1.carton_qty == "1"
+    assert parsed_both_1.total_qty == "1"
+
+
+def test_parse_qr_payload_legacy_reconciliation():
+    """Verify legacy QR codes where old software repeated total_qty in the carton_qty slot."""
+    # Legacy slip with 3 boxes and total 60, where old software printed 60 in both slots:
+    legacy_repeated_qr = (
+        "112608180100010+001    0000000600003W2ND25350 01            000000060000"
+        + (" " * 26)
+        + (" " * 24)
+        + "001/003"
+    )
+    parsed = parse_qr_payload(legacy_repeated_qr)
+    assert parsed.total_qty == "60"
+    assert parsed.carton_qty == "20"
+
+    # Single-box slip where total and carton are both 50 (multiplier 1): remains 50
+    single_box_qr = (
+        "112608180100010+001    0000000500003W2ND25350 01            000000050000"
+        + (" " * 26)
+        + (" " * 24)
+        + "001/001"
+    )
+    parsed_single = parse_qr_payload(single_box_qr)
+    assert parsed_single.total_qty == "50"
+    assert parsed_single.carton_qty == "50"
+
+

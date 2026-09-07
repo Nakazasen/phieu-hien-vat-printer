@@ -560,28 +560,27 @@ Sidebar của màn hình in chỉ phục vụ luồng nghiệp vụ: **chọn Ex
 
 ### 15.1 Contract QR EDI đã đối chiếu PDF tham chiếu
 
-Nguồn đối chiếu là `260211_105322(mẫu tham khảo khi xuất tem bằng phần mềm).pdf`. Đã render đủ 3 trang và giải mã QR bằng OpenCV; ba QR có cùng prefix 122 ký tự, chỉ khác trường Box cuối:
+Nguồn đối chiếu gốc là `260211_105322(mẫu tham khảo khi xuất tem bằng phần mềm).pdf` và mã QR thực tế từ nhà cung cấp (`130602404900010+001    0000048000003V2ND25480 03            0000024000002026-05-09                                        001/002`):
 
 ```text
-112602110100010+001    0000000100003W2ND25350 01            000000010000                                                  001/003
-112602110100010+001    0000000100003W2ND25350 01            000000010000                                                  002/003
-112602110100010+001    0000000100003W2ND25350 01            000000010000                                                  003/003
+Mã QR nhà cung cấp (2 box x 2.400 pcs = 4.800 pcs tổng):
+130602404900010+001    0000048000003V2ND25480 03            0000024000002026-05-09                                        001/002
 ```
 
 Contract hiện hành của `build_qr_payload`:
 
 | Trường | Độ dài | Quy tắc |
 |---|---:|---|
-| PO + PO chi tiết + PO phụ | 19 | Ví dụ `1126021101` + `00010` + `+001`. |
+| PO + PO chi tiết + PO phụ | 19 | Ví dụ `1306024049` + `00010` + `+001`. |
 | Khoảng cách sau PO | 4 | Cố định. |
-| Tổng số lượng | 12 | 8 chữ số + 4 số `0`: `1` → `000000010000`, `180` → `000001800000`. |
+| Tổng số lượng | 12 | Fixed-point 9.3 (`value * 1000`, 12 số zero-padded): `2400` → `000002400000`, `4800` → `000004800000`, `1` → `000000001000`. |
 | Mã hàng + khoảng trắng + Rev | 25 | Pad bên phải bằng khoảng trắng. |
-| Tổng số lượng lặp lại | 12 | Cùng quy tắc trường số lượng đầu. |
+| Số lượng thùng (Carton Qty) | 12 | Fixed-point 9.3 như trường Tổng SL (chứa SL/thùng, KHÔNG lặp lại Tổng SL). |
 | Lot | 26 | Pad bên phải bằng khoảng trắng. |
 | Khoảng cách trước Box | 24 | Cố định. |
-| Box | biến đổi | Giữ nguyên, ví dụ `001/003` hoặc `1`. |
+| Box | biến đổi | Giữ nguyên, ví dụ `001/002`, `001/003` hoặc `001/001`. |
 
-Vì vậy payload có độ dài `122 + len(Box)`: `001/003` là 129 ký tự; `1` là 123 ký tự. Đã có test so sánh byte-for-byte với PDF tham chiếu và test QR tạo mới → giải mã ngược đúng payload.
+Vì vậy payload có độ dài `122 + len(Box)`: `001/003` là 129 ký tự; `1` là 123 ký tự (chuẩn hóa `001/001` là 129 ký tự). Hàm `parse_qr_payload` trích xuất độc lập cả `total_qty` tại vị trí 23:35 và `carton_qty` tại vị trí 60:72 (chia 1000), có cơ chế tự động tương thích ngược cho tem cũ. Đã có test so sánh byte-for-byte với PDF tham chiếu, tem thực tế của nhà cung cấp và test roundtrip tạo mới → giải mã ngược chính xác 100%.
 
 ### 15.2 Quy tắc Rev
 
