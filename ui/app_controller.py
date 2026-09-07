@@ -329,6 +329,11 @@ class AppController:
                 return
 
         self.app_state.records.extend(new_records)
+        if hasattr(self.app_state, "part_master") and item_code and item_name and rev:
+            try:
+                self.app_state.part_master.upsert(item_code, item_name, rev)
+            except ValueError:
+                pass
         if self.view:
             if len(new_records) == 1:
                 self.view.append_log(f"Đã thêm dòng {new_records[0].row_number}: {new_records[0].item_code}")
@@ -359,6 +364,11 @@ class AppController:
             return
 
         self.app_state.records[self.app_state.selected_record_index] = record
+        if hasattr(self.app_state, "part_master") and record.item_code and record.item_name and record.rev:
+            try:
+                self.app_state.part_master.upsert(record.item_code, record.item_name, record.rev)
+            except ValueError:
+                pass
         if self.view:
             self.view.append_log(f"Đã cập nhật dòng {record.row_number}: {record.item_code}")
             self.view.set_records(self.app_state.records, select_index=self.app_state.selected_record_index)
@@ -462,6 +472,16 @@ class AppController:
                 self.view.append_log(f"Cảnh báo: Phát hiện {len(duplicate_records)} dòng trùng mã EDI trong database.")
 
         self.app_state.records = list(records)
+        if hasattr(self.app_state, "part_master"):
+            for r in records:
+                try:
+                    c_code = r.item_code.strip()
+                    c_name = r.item_name.strip()
+                    c_rev = r.rev.strip()
+                    if c_code and c_name and c_rev:
+                        self.app_state.part_master.upsert(c_code, c_name, c_rev)
+                except ValueError:
+                    pass
         if self.view:
             self.view.set_records(records, select_index=0, source=f"Đã import {len(records)} dòng từ Excel: {excel_path}")
 
@@ -699,7 +719,71 @@ class AppController:
         if sys.platform == "win32":
             os.startfile(folder)
 
+    def on_item_code_input_changed(self, *_args) -> None:
+        """Auto-fill item_name and rev from Part Master when item_code matches."""
+        raw_code = self.app_state.item_code_var.get().strip().upper()
+        if not raw_code:
+            return
+        if hasattr(self.app_state, "part_master"):
+            entry = self.app_state.part_master.get(raw_code)
+            if entry:
+                self.app_state.item_name_var.set(entry.item_name)
+                self.app_state.rev_var.set(entry.rev)
+                self.app_state.status_var.set(f"Đã tự động điền Tên hàng & Rev từ Master ({entry.item_code})")
+                if self.view:
+                    self.view.append_log(f"Master: Tự động điền '{entry.item_name}' (Rev {entry.rev}) cho mã {entry.item_code}")
+
+    def save_part_master(self) -> None:
+        """Validate and save/update part master record from Master tab."""
+        code = self.app_state.master_item_code_var.get().strip().upper()
+        name = self.app_state.master_item_name_var.get().strip()
+        rev = self.app_state.master_rev_var.get().strip()
+
+        try:
+            saved = self.app_state.part_master.upsert(code, name, rev)
+            self.app_state.master_status_var.set(f"Đã lưu Master: {saved.item_code} - {saved.item_name} (Rev {saved.rev})")
+            if self.view:
+                self.view.append_log(f"Master: Đã lưu thành công {saved.item_code} ({saved.item_name} - Rev {saved.rev})")
+                if hasattr(self.view, "part_master_tab"):
+                    self.view.part_master_tab.refresh_table()
+        except ValueError as err:
+            messagebox.showwarning("Lỗi Master Linh Kiện", str(err))
+            self.app_state.master_status_var.set(f"Lỗi: {err}")
+
+    def delete_part_master(self) -> None:
+        """Delete selected part master record."""
+        code = self.app_state.master_item_code_var.get().strip().upper()
+        if not code:
+            messagebox.showwarning("Xóa Master Linh Kiện", "Vui lòng chọn hoặc nhập Mã linh kiện cần xóa!")
+            return
+        if not messagebox.askyesno("Xác nhận xóa", f"Bạn có chắc muốn xóa mã linh kiện '{code}' khỏi Master?"):
+            return
+        deleted = self.app_state.part_master.delete(code)
+        if deleted:
+            self.app_state.master_status_var.set(f"Đã xóa Master: {code}")
+            self.clear_part_master_form()
+            if self.view:
+                self.view.append_log(f"Master: Đã xóa thành công mã {code}")
+                if hasattr(self.view, "part_master_tab"):
+                    self.view.part_master_tab.refresh_table()
+        else:
+            messagebox.showwarning("Xóa Master Linh Kiện", f"Không tìm thấy mã linh kiện '{code}' trong Master!")
+
+    def clear_part_master_form(self) -> None:
+        """Reset Master tab form to blank."""
+        self.app_state.master_item_code_var.set("")
+        self.app_state.master_item_name_var.set("")
+        self.app_state.master_rev_var.set("01")
+        self.app_state.master_status_var.set("Sẵn sàng nhập linh kiện mới")
+
+    def search_part_master(self, *_args) -> None:
+        """Refresh Master tab table with filter query."""
+        if self.view and hasattr(self.view, "part_master_tab"):
+            self.view.part_master_tab.refresh_table()
+
     def on_close(self) -> None:
         self.app_state.po_registry.close()
+        if hasattr(self.app_state, "part_master"):
+            self.app_state.part_master.close()
         if self.view:
             self.view.destroy()

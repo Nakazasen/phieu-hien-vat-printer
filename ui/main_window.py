@@ -25,6 +25,7 @@ from ui.app_state import AppState
 from ui.components.data_tab import DataTabPanel
 from ui.components.history_tab import HistoryTabPanel
 from ui.components.layout_tab import LayoutTabPanel
+from ui.components.part_master_tab import PartMasterTabPanel
 from ui.components.qr_scan_tab import QRScanTabPanel
 from ui.components.sidebar import SidebarPanel
 from ui.preview_renderer import AsyncPreviewRenderer
@@ -107,6 +108,8 @@ class SlipPrinterApp(ctk.CTk):
                     pass
             if hasattr(self, "app_state") and hasattr(self.app_state, "po_registry"):
                 self.app_state.po_registry.close()
+            if hasattr(self, "app_state") and hasattr(self.app_state, "part_master"):
+                self.app_state.part_master.close()
         except Exception:  # noqa: BLE001
             pass
         try:
@@ -223,6 +226,10 @@ class SlipPrinterApp(ctk.CTk):
         self.qr_tab = QRScanTabPanel(self.notebook, self.controller, corner_radius=0)
         self.notebook.add(self.qr_tab, text="📷 Quét QR")
 
+        # Tab Master Linh Kiện
+        self.part_master_tab = PartMasterTabPanel(self.notebook, self.controller, corner_radius=0)
+        self.notebook.add(self.part_master_tab, text="📋 Master Linh Kiện")
+
         # Tự động nạp lại khi chuyển tab
         self.notebook.bind("<<NotebookTabChanged>>", self._on_notebook_tab_changed)
 
@@ -328,6 +335,9 @@ class SlipPrinterApp(ctk.CTk):
                     self.refresh_history()
             elif "Quét QR" in selected_tab:
                 self.qr_tab.focus_scan_entry()
+            elif "Master" in selected_tab:
+                if hasattr(self, "part_master_tab"):
+                    self.part_master_tab.refresh_table()
         except Exception:  # noqa: BLE001
             pass
 

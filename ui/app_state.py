@@ -7,6 +7,7 @@ from pathlib import Path
 import customtkinter as ctk
 from PIL import Image
 
+from core.part_master import PartMasterRegistry
 from core.po_registry import PORegistry
 from core.runtime_paths import RuntimePaths, prepare_runtime_paths
 from core.slip_printer_engine import SlipRecord, load_layout_config
@@ -24,6 +25,8 @@ class AppState:
         self.template_path = self.paths.template_path
         self.layout_config = load_layout_config(self.layout_path)
         self.po_registry = PORegistry(self.paths.registry_path)
+        self.part_master_path = self.paths.data_dir / "part_master.db"
+        self.part_master = PartMasterRegistry(self.part_master_path)
 
         # In-memory data
         self.records: list[SlipRecord] = []
@@ -74,6 +77,14 @@ class AppState:
         self.history_today_var = ctk.StringVar(master=self.root, value="0")
         self.history_next_po_var = ctk.StringVar(master=self.root, value="--")
         self.history_status_var = ctk.StringVar(master=self.root, value="")
+
+        # Part Master fields
+        self.master_item_code_var = ctk.StringVar(master=self.root, value="")
+        self.master_item_name_var = ctk.StringVar(master=self.root, value="")
+        self.master_rev_var = ctk.StringVar(master=self.root, value="01")
+        self.master_search_var = ctk.StringVar(master=self.root, value="")
+        self.master_status_var = ctk.StringVar(master=self.root, value="")
+        self.master_count_var = ctk.StringVar(master=self.root, value="0")
 
     def _default_excel_path(self) -> str:
         default_path = self.bundle_dir / "DummySlip.xlsx"

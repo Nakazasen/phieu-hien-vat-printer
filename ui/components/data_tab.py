@@ -58,8 +58,10 @@ class DataTabPanel(ctk.CTkFrame):
         ).pack(side="right")
 
         # Hàng 1: Mã hàng (*) | Tên hàng (*)
-        self._form_field(form_frame, 1, 0, "Mã hàng (*):", self.app_state.item_code_var, uppercase=True)
-        self._form_field(form_frame, 1, 2, "Tên hàng (*):", self.app_state.item_name_var, uppercase=True)
+        self.item_code_entry = self._form_field(form_frame, 1, 0, "Mã hàng (*):", self.app_state.item_code_var, uppercase=True)
+        self.item_code_entry.bind("<FocusOut>", self.controller.on_item_code_input_changed, add="+")
+        self.item_code_entry.bind("<Return>", self.controller.on_item_code_input_changed, add="+")
+        self.item_name_entry = self._form_field(form_frame, 1, 2, "Tên hàng (*):", self.app_state.item_name_var, uppercase=True)
 
         # Hàng 2: SL/thùng(*) | Tổng số lượng (tự tính)
         self._form_field(form_frame, 2, 0, "SL/thùng(*):", self.app_state.carton_qty_var)
