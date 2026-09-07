@@ -86,6 +86,11 @@ class AppState:
         self.master_status_var = ctk.StringVar(master=self.root, value="")
         self.master_count_var = ctk.StringVar(master=self.root, value="0")
 
+        # Layout display options (BooleanVars)
+        layout_opts = self.layout_config.get("options", {})
+        self.opt_hide_total_qty_var = ctk.BooleanVar(master=self.root, value=bool(layout_opts.get("hide_total_qty_on_slip", True)))
+        self.opt_hide_package_qty_var = ctk.BooleanVar(master=self.root, value=bool(layout_opts.get("hide_package_qty_box", True)))
+
     def _default_excel_path(self) -> str:
         default_path = self.bundle_dir / "DummySlip.xlsx"
         return str(default_path) if default_path.exists() else ""

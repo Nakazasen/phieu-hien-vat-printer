@@ -197,17 +197,47 @@ class DataTabPanel(ctk.CTkFrame):
         self.preview_frame = ctk.CTkFrame(self, corner_radius=12)
         preview_frame = self.preview_frame
         preview_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 10), pady=10)
-        preview_frame.grid_rowconfigure(1, weight=1)
+        preview_frame.grid_rowconfigure(2, weight=1)
         preview_frame.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(preview_frame, text="🔍 Xem trước tem in", font=ctk.CTkFont(size=15, weight="bold")).grid(
-            row=0, column=0, sticky="w", padx=14, pady=(10, 6)
+        # Header preview kèm thanh công tắc nhanh
+        preview_top_bar = ctk.CTkFrame(preview_frame, fg_color="transparent")
+        preview_top_bar.grid(row=0, column=0, sticky="ew", padx=12, pady=(8, 4))
+        preview_top_bar.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(preview_top_bar, text="🔍 Xem trước tem in", font=ctk.CTkFont(size=15, weight="bold")).grid(
+            row=0, column=0, sticky="w"
         )
+
+        # Cụm công tắc tùy chọn hiển thị nhanh (Quick switches)
+        quick_opts = ctk.CTkFrame(preview_frame, corner_radius=8, fg_color=("gray92", "gray20"))
+        quick_opts.grid(row=1, column=0, sticky="ew", padx=12, pady=(0, 6))
+        quick_opts.grid_columnconfigure((0, 1), weight=1)
+
+        self.sw_quick_hide_total = ctk.CTkSwitch(
+            quick_opts,
+            text="Chỉ in SL thùng",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            variable=self.app_state.opt_hide_total_qty_var,
+            progress_color=("#10B981", "#059669"),
+            command=self.controller.on_layout_option_changed,
+        )
+        self.sw_quick_hide_total.grid(row=0, column=0, padx=(10, 4), pady=5, sticky="w")
+
+        self.sw_quick_hide_pkg = ctk.CTkSwitch(
+            quick_opts,
+            text="Ẩn PACKAGE QTY",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            variable=self.app_state.opt_hide_package_qty_var,
+            progress_color=("#10B981", "#059669"),
+            command=self.controller.on_layout_option_changed,
+        )
+        self.sw_quick_hide_pkg.grid(row=0, column=1, padx=(4, 10), pady=5, sticky="e")
 
         self.preview_image_label = ctk.CTkLabel(
             preview_frame, text="Chưa có dữ liệu để xem trước", font=ctk.CTkFont(size=13), text_color="gray50"
         )
-        self.preview_image_label.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 8))
+        self.preview_image_label.grid(row=2, column=0, sticky="nsew", padx=12, pady=(0, 8))
         # Debounce resize: coalesces the <Configure> flood during window drag-resize
         # into a single re-thumbnail pass (prevents redraw storm on weak machines).
         self._preview_resize_job = None
@@ -216,10 +246,10 @@ class DataTabPanel(ctk.CTkFrame):
         self.preview_image_label.bind("<Configure>", self._on_preview_resize)
 
         ctk.CTkLabel(preview_frame, text="Chuỗi QR của dòng đang chọn:", font=ctk.CTkFont(size=12, weight="bold")).grid(
-            row=2, column=0, sticky="w", padx=14, pady=(0, 4)
+            row=3, column=0, sticky="w", padx=14, pady=(0, 4)
         )
         self.qr_payload_box = ctk.CTkTextbox(preview_frame, height=65, font=ctk.CTkFont(family="Consolas", size=11))
-        self.qr_payload_box.grid(row=3, column=0, sticky="ew", padx=12, pady=(0, 8))
+        self.qr_payload_box.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 8))
         self.qr_payload_box.configure(state="disabled")
 
         self.btn_refresh_preview = ctk.CTkButton(
@@ -227,7 +257,7 @@ class DataTabPanel(ctk.CTkFrame):
             fg_color=("gray85", "gray25"), text_color=("gray10", "gray90"), hover_color=("gray75", "gray35"),
             command=self.refresh_preview_image
         )
-        self.btn_refresh_preview.grid(row=4, column=0, sticky="ew", padx=12, pady=(0, 12))
+        self.btn_refresh_preview.grid(row=5, column=0, sticky="ew", padx=12, pady=(0, 12))
 
         # Init state listeners
         self.app_state.carton_qty_var.trace_add("write", self.controller.sync_total_qty)

@@ -416,6 +416,19 @@ def main(argv: list[str] | None = None) -> int:
     artifact = build_update_package(APP_DIST, output, min_app_version=args.min_app_version)
     print(f"Đã tạo gói cập nhật: {artifact}")
 
+    local_catalog = RELEASE_ARTIFACTS / "latest.json"
+    local_payload = {
+        "schema": 1,
+        "channel": str(release["channel"]),
+        "version": str(release["version"]),
+        "package": output.name,
+        "sha256": _sha256(output),
+        "size": output.stat().st_size,
+        "notes": args.release_notes,
+    }
+    local_catalog.write_text(json.dumps(local_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"Đã tạo catalog cục bộ: {local_catalog}")
+
     update_dir = Path(args.publish_dir or (DEFAULT_LAN_UPDATE_DIR if args.publish_lan else "")) if (args.publish_dir or args.publish_lan) else None
     if update_dir:
         published, catalog = publish_update(artifact, update_dir, notes=args.release_notes)

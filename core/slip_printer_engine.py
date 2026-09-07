@@ -88,7 +88,7 @@ DEFAULT_LAYOUT_CONFIG: dict[str, Any] = {
         {"id": "po_sub_right_1", "label": "PO phụ phải 1", "field": "po_sub", "x": 710, "y": 70},
         {"id": "box_right_1", "label": "Box phải 1", "field": "box", "x": 780, "y": 70},
         {"id": "item_name_right_1", "label": "Tên hàng phải 1", "field": "item_name", "x": 650, "y": 85},
-        {"id": "qty_right_1", "label": "SL phải 1", "field": "carton_qty", "x": 670, "y": 100},
+        {"id": "qty_right_1", "label": "SL phải 1", "field": "carton_qty", "x": 705, "y": 100},
         {"id": "qty_right_2", "label": "SL phải 2", "field": "total_qty", "x": 750, "y": 100},
         {"id": "lot_right_1", "label": "Lot phải 1", "field": "lot", "x": 610, "y": 150},
         {"id": "po_bottom", "label": "PO dưới", "field": "po", "x": 380, "y": 380},
@@ -99,6 +99,10 @@ DEFAULT_LAYOUT_CONFIG: dict[str, Any] = {
         {"id": "item_name_bottom", "label": "Tên hàng dưới", "field": "item_name", "x": 190, "y": 410},
         {"id": "qty_bottom", "label": "SL dưới", "field": "qty", "x": 400, "y": 410},
     ],
+    "options": {
+        "hide_total_qty_on_slip": True,
+        "hide_package_qty_box": True,
+    },
 }
 
 
@@ -926,7 +930,31 @@ def _draw_record_page(pdf_canvas: canvas.Canvas, record: SlipRecord, layout_conf
     font = layout_config["font"]
     pdf_canvas.setFont(font["name"], font["size"])
     values = record.as_field_map()
+
+    options = layout_config.get("options", {})
+    hide_total_qty = options.get("hide_total_qty_on_slip", True)
+    hide_package_qty = options.get("hide_package_qty_box", True)
+
     for item in layout_config["text_positions"]:
+        item_id = item.get("id", "")
+
+        # 1. Option: Hide total quantity and slash in Delivery QTY
+        if item_id == "qty_right_2" and hide_total_qty:
+            continue
+        if item_id == "qty_right_1":
+            if hide_total_qty:
+                target_x = 705 if item["x"] == 670 else item["x"]
+                pdf_canvas.drawCentredString(target_x, height - item["y"], str(record.carton_qty))
+                continue
+            else:
+                pdf_canvas.drawString(item["x"], height - item["y"], str(record.carton_qty))
+                pdf_canvas.drawCentredString(710, height - item["y"], "/")
+                continue
+
+        # 2. Option: Hide box in PACKAGE QTY
+        if item_id == "box_right_1" and hide_package_qty:
+            continue
+
         text = values.get(item["field"], "")
         pdf_canvas.drawString(item["x"], height - item["y"], text)
     pdf_canvas.showPage()

@@ -561,17 +561,44 @@ class AppController:
             "👉 Cấu hình vị trí này sẽ được tự động ghi nhớ và áp dụng cho các lần in tiếp theo.",
         )
 
+    def on_layout_option_changed(self) -> None:
+        """Handle toggle changes for new template display options."""
+        if "options" not in self.app_state.layout_config:
+            self.app_state.layout_config["options"] = {}
+        is_hide_total = self.app_state.opt_hide_total_qty_var.get()
+        is_hide_pkg = self.app_state.opt_hide_package_qty_var.get()
+        self.app_state.layout_config["options"]["hide_total_qty_on_slip"] = is_hide_total
+        self.app_state.layout_config["options"]["hide_package_qty_box"] = is_hide_pkg
+        save_layout_config(self.app_state.layout_config, self.app_state.layout_path)
+        if self.view:
+            if hasattr(self.view, "layout_tab") and hasattr(self.view.layout_tab, "sync_option_ui"):
+                self.view.layout_tab.sync_option_ui()
+            self.view.refresh_preview_image()
+            msg = f"Đã lưu tùy chọn tem: [SL: {'Chỉ in 1 thùng' if is_hide_total else 'In kèm tổng SL'}] | [PACKAGE QTY: {'Ẩn' if is_hide_pkg else 'Hiện'}]"
+            self.view.append_log(msg)
+
     def reload_layout_config(self) -> None:
         self.app_state.layout_config = load_layout_config(self.app_state.layout_path)
+        opts = self.app_state.layout_config.get("options", {})
+        self.app_state.opt_hide_total_qty_var.set(bool(opts.get("hide_total_qty_on_slip", True)))
+        self.app_state.opt_hide_package_qty_var.set(bool(opts.get("hide_package_qty_box", True)))
         if self.view:
             self.view.refresh_layout_tree()
+            if hasattr(self.view, "layout_tab") and hasattr(self.view.layout_tab, "sync_option_ui"):
+                self.view.layout_tab.sync_option_ui()
             self.view.refresh_preview_image()
             self.view.append_log("Đã nạp lại cấu hình layout từ file.")
 
     def reset_layout_config(self) -> None:
         self.app_state.layout_config = get_default_layout_config()
+        opts = self.app_state.layout_config.get("options", {})
+        self.app_state.opt_hide_total_qty_var.set(bool(opts.get("hide_total_qty_on_slip", True)))
+        self.app_state.opt_hide_package_qty_var.set(bool(opts.get("hide_package_qty_box", True)))
+        save_layout_config(self.app_state.layout_config, self.app_state.layout_path)
         if self.view:
             self.view.refresh_layout_tree()
+            if hasattr(self.view, "layout_tab") and hasattr(self.view.layout_tab, "sync_option_ui"):
+                self.view.layout_tab.sync_option_ui()
             self.view.refresh_preview_image()
             self.view.append_log("Đã khôi phục layout mặc định.")
 

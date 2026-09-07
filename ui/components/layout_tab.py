@@ -82,9 +82,133 @@ class LayoutTabPanel(ctk.CTkFrame):
         )
         self.active_label_display.grid(row=0, column=1, sticky="w", padx=(0, 10), pady=6)
 
+        # ========================================================
+        # KHỐI TÙY CHỌN HIỂN THỊ TEM IN THÔNG MINH (SMART UX/UI)
+        # ========================================================
+        self.options_card = ctk.CTkFrame(
+            editor, corner_radius=10, fg_color=("gray94", "gray18"), border_width=1, border_color=("gray80", "gray28")
+        )
+        options_card = self.options_card
+        options_card.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 8))
+        options_card.grid_columnconfigure(0, weight=1)
+
+        # Header của Card tùy chọn
+        opt_header = ctk.CTkFrame(options_card, fg_color="transparent")
+        opt_header.grid(row=0, column=0, sticky="ew", padx=12, pady=(10, 6))
+        opt_header.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            opt_header,
+            text="🎛️ Tùy chọn hiển thị tem in",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, sticky="w")
+
+        ctk.CTkLabel(
+            opt_header,
+            text="Thiết kế mới 2026",
+            font=ctk.CTkFont(size=10, weight="bold"),
+            fg_color=("#10B981", "#047857"),
+            text_color="white",
+            corner_radius=6,
+            padx=8,
+            pady=2,
+        ).grid(row=0, column=1, sticky="e")
+
+        # Switch 1: Ẩn tổng số lượng / Chỉ in số lượng thùng
+        s1_frame = ctk.CTkFrame(options_card, corner_radius=8, fg_color=("white", "gray22"))
+        s1_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 6))
+        s1_frame.grid_columnconfigure(0, weight=1)
+
+        s1_top = ctk.CTkFrame(s1_frame, fg_color="transparent")
+        s1_top.grid(row=0, column=0, sticky="ew", padx=10, pady=(6, 2))
+        s1_top.grid_columnconfigure(0, weight=1)
+
+        self.sw_hide_total = ctk.CTkSwitch(
+            s1_top,
+            text="Ẩn tổng số lượng (Chỉ in SL thùng)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            variable=self.app_state.opt_hide_total_qty_var,
+            progress_color=("#10B981", "#059669"),
+            command=self._on_switch_toggle,
+        )
+        self.sw_hide_total.grid(row=0, column=0, sticky="w")
+
+        self.lbl_total_status = ctk.CTkLabel(
+            s1_top,
+            text="[Chỉ in 20]" if self.app_state.opt_hide_total_qty_var.get() else "[In 20 / 60]",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#059669", "#34D399") if self.app_state.opt_hide_total_qty_var.get() else ("gray50", "gray50"),
+        )
+        self.lbl_total_status.grid(row=0, column=1, sticky="e")
+
+        ctk.CTkLabel(
+            s1_frame,
+            text="• BẬT: Chỉ in số lượng 1 thùng (ví dụ: 20) căn giữa ô hàng giao.\n• TẮT: In theo dạng cũ kèm gạch chéo (ví dụ: 20 / 60).",
+            font=ctk.CTkFont(size=10),
+            text_color=("gray40", "gray60"),
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 6))
+
+        # Switch 2: Ẩn số thùng tại ô PACKAGE QTY
+        s2_frame = ctk.CTkFrame(options_card, corner_radius=8, fg_color=("white", "gray22"))
+        s2_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 6))
+        s2_frame.grid_columnconfigure(0, weight=1)
+
+        s2_top = ctk.CTkFrame(s2_frame, fg_color="transparent")
+        s2_top.grid(row=0, column=0, sticky="ew", padx=10, pady=(6, 2))
+        s2_top.grid_columnconfigure(0, weight=1)
+
+        self.sw_hide_package = ctk.CTkSwitch(
+            s2_top,
+            text="Ẩn số thùng tại ô PACKAGE QTY",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            variable=self.app_state.opt_hide_package_qty_var,
+            progress_color=("#10B981", "#059669"),
+            command=self._on_switch_toggle,
+        )
+        self.sw_hide_package.grid(row=0, column=0, sticky="w")
+
+        self.lbl_pkg_status = ctk.CTkLabel(
+            s2_top,
+            text="[Ô trống]" if self.app_state.opt_hide_package_qty_var.get() else "[In 001/003]",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            text_color=("#059669", "#34D399") if self.app_state.opt_hide_package_qty_var.get() else ("gray50", "gray50"),
+        )
+        self.lbl_pkg_status.grid(row=0, column=1, sticky="e")
+
+        ctk.CTkLabel(
+            s2_frame,
+            text="• BẬT: Để trống ô cạnh mã vạch PACKAGE QTY theo thiết kế mới.\n• TẮT: In số thứ tự thùng (ví dụ: 001/003) vào ô này.",
+            font=ctk.CTkFont(size=10),
+            text_color=("gray40", "gray60"),
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 6))
+
+        # Lưu ý về các ô đóng dấu / ghi tay
+        note_frame = ctk.CTkFrame(options_card, corner_radius=6, fg_color=("#EFF6FF", "#1E293B"))
+        note_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=(2, 6))
+        ctk.CTkLabel(
+            note_frame,
+            text="✍️ Các ô Line QC, Part QC, PD, Ca/Đổi khuôn, Box No. & CAV No. là ô trắng để ghi tay hoặc đóng dấu thực tế tại xưởng.",
+            font=ctk.CTkFont(size=10),
+            text_color=("#1E40AF", "#93C5FD"),
+            wraplength=310,
+            justify="left",
+        ).pack(padx=8, pady=6)
+
+        # Cam kết toàn vẹn mã QR
+        ctk.CTkLabel(
+            options_card,
+            text="🔒 Chuỗi QR Code (129 ký tự) luôn lưu đầy đủ 100% dữ liệu gốc bất kể tùy chọn hiển thị tem ở trên.",
+            font=ctk.CTkFont(size=9, slant="italic"),
+            text_color=("gray45", "gray55"),
+            wraplength=310,
+            justify="left",
+        ).grid(row=4, column=0, sticky="w", padx=12, pady=(0, 8))
+
         # 1. BƯỚC NHẢY (STEP SELECTOR)
         step_row = ctk.CTkFrame(editor, fg_color="transparent")
-        step_row.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 6))
+        step_row.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 6))
         ctk.CTkLabel(step_row, text="Mức dịch chuyển:", font=ctk.CTkFont(size=11, weight="bold")).pack(side="left", padx=(0, 8))
         for step_val, label in (("1", "1 mm (Tinh chỉnh)"), ("5", "5 mm (Chuẩn)"), ("15", "15 mm (Nhanh)")):
             ctk.CTkRadioButton(
@@ -93,7 +217,7 @@ class LayoutTabPanel(ctk.CTkFrame):
 
         # 2. CỤM NÚT ĐIỀU HƯỚNG D-PAD
         dpad_frame = ctk.CTkFrame(editor, corner_radius=8, fg_color=("gray92", "gray17"))
-        dpad_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 6))
+        dpad_frame.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 6))
         dpad_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
         ctk.CTkButton(
@@ -120,7 +244,7 @@ class LayoutTabPanel(ctk.CTkFrame):
 
         # 3. CỤM THAY ĐỔI KÍCH THƯỚC (DÀNH CHO QR & Ô IN)
         size_frame = ctk.CTkFrame(editor, corner_radius=8, fg_color=("gray92", "gray17"))
-        size_frame.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 6))
+        size_frame.grid(row=5, column=0, sticky="ew", padx=10, pady=(0, 6))
         size_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         ctk.CTkLabel(size_frame, text="📐 Kích thước:", font=ctk.CTkFont(size=11, weight="bold")).grid(
@@ -141,7 +265,7 @@ class LayoutTabPanel(ctk.CTkFrame):
 
         # 4. CÁC NÚT LƯU & KHÔI PHỤC HÀNH ĐỘNG
         actions_frame = ctk.CTkFrame(editor, fg_color="transparent")
-        actions_frame.grid(row=5, column=0, sticky="ew", padx=10, pady=(2, 6))
+        actions_frame.grid(row=6, column=0, sticky="ew", padx=10, pady=(2, 6))
         actions_frame.grid_columnconfigure((0, 1, 2), weight=1)
 
         ctk.CTkButton(
@@ -174,7 +298,7 @@ class LayoutTabPanel(ctk.CTkFrame):
             justify="left",
             font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"),
-        ).grid(row=6, column=0, sticky="w", padx=10, pady=(2, 8))
+        ).grid(row=7, column=0, sticky="w", padx=10, pady=(2, 8))
 
     def _nudge(self, x_dir: int, y_dir: int) -> None:
         try:
@@ -223,3 +347,21 @@ class LayoutTabPanel(ctk.CTkFrame):
                 self.app_state.width_var.set("" if item["width"] is None else str(item["width"]))
                 self.app_state.height_var.set("" if item["height"] is None else str(item["height"]))
                 return
+
+    def _on_switch_toggle(self) -> None:
+        self.sync_option_ui()
+        self.controller.on_layout_option_changed()
+
+    def sync_option_ui(self) -> None:
+        if hasattr(self, "lbl_total_status"):
+            is_hide_total = self.app_state.opt_hide_total_qty_var.get()
+            self.lbl_total_status.configure(
+                text="[Chỉ in 20]" if is_hide_total else "[In 20 / 60]",
+                text_color=("#059669", "#34D399") if is_hide_total else ("gray50", "gray50"),
+            )
+        if hasattr(self, "lbl_pkg_status"):
+            is_hide_pkg = self.app_state.opt_hide_package_qty_var.get()
+            self.lbl_pkg_status.configure(
+                text="[Ô trống]" if is_hide_pkg else "[In 001/003]",
+                text_color=("#059669", "#34D399") if is_hide_pkg else ("gray50", "gray50"),
+            )
