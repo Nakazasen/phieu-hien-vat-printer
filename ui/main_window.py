@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import errno
 import json
 import os
 import queue
+import sys
 import time
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -151,8 +153,27 @@ class SlipPrinterApp(ctk.CTk):
         ctk.CTkLabel(header, textvariable=self.app_state.summary_var, font=ctk.CTkFont(size=20, weight="bold")).grid(
             row=0, column=0, sticky="w"
         )
-        ctk.CTkLabel(header, textvariable=self.app_state.status_var, font=ctk.CTkFont(size=12), text_color=("gray40", "gray60")).grid(
-            row=1, column=0, sticky="w", pady=(3, 0)
+        status_row = ctk.CTkFrame(header, fg_color="transparent")
+        status_row.grid(row=1, column=0, sticky="w", pady=(3, 0))
+
+        is_offline = getattr(self.app_state.paths, "is_offline_fallback", False)
+        db_badge_text = "🔴 Mất kết nối LAN (Khóa tự sinh PO)" if is_offline else "🟢 LAN DB Đã kết nối"
+        db_badge_fg = ("#FEE2E2", "#7F1D1D") if is_offline else ("#D1FAE5", "#064E3B")
+        db_badge_text_color = ("#DC2626", "#FCA5A5") if is_offline else ("#059669", "#6EE7B7")
+        self.db_status_badge = ctk.CTkLabel(
+            status_row,
+            text=db_badge_text,
+            font=ctk.CTkFont(size=11, weight="bold"),
+            fg_color=db_badge_fg,
+            text_color=db_badge_text_color,
+            corner_radius=4,
+            padx=6,
+            pady=1,
+        )
+        self.db_status_badge.pack(side="left", padx=(0, 8))
+
+        ctk.CTkLabel(status_row, textvariable=self.app_state.status_var, font=ctk.CTkFont(size=12), text_color=("gray40", "gray60")).pack(
+            side="left"
         )
 
         preview_controls = ctk.CTkFrame(header, fg_color="transparent")
@@ -614,16 +635,52 @@ def run_health_check() -> None:
     print(f"Kiểm tra hệ thống thành công: {paths.template_path}")
 
 
+def _is_pid_alive(pid: int) -> bool:
+    """Check if a process with given PID is still active without crashing on Win32 handle errors."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+            SYNCHRONIZE = 0x00100000
+            STILL_ACTIVE = 259
+            kernel32 = ctypes.windll.kernel32
+            handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, pid)
+            if not handle:
+                return False
+            try:
+                exit_code = ctypes.c_ulong()
+                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                    return exit_code.value == STILL_ACTIVE
+                return False
+            finally:
+                kernel32.CloseHandle(handle)
+        except Exception:
+            pass
+
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+    except OSError as exc:
+        # On Windows, os.kill on an already-exited or terminated process can raise:
+        # WinError 87: ERROR_INVALID_PARAMETER
+        # WinError 6: ERROR_INVALID_HANDLE
+        winerror = getattr(exc, "winerror", None)
+        if winerror in (6, 87) or exc.errno in (errno.ESRCH, errno.EINVAL):
+            return False
+        return False
+
+
 def _wait_for_process_exit(pid: int, timeout_seconds: float = 120.0) -> None:
+    """Wait until the target process exits, safely handling Windows handle closure."""
     if pid <= 0:
         raise ValueError("PID cần chờ phải lớn hơn 0.")
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
-            return
-        except PermissionError:
+        if not _is_pid_alive(pid):
             return
         time.sleep(0.2)
     raise TimeoutError(f"Tiến trình {pid} chưa thoát sau {timeout_seconds:.0f} giây.")

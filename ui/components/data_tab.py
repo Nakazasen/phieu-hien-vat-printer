@@ -73,10 +73,37 @@ class DataTabPanel(ctk.CTkFrame):
         self._form_field(form_frame, 3, 0, "Số thùng(*):", self.app_state.box_var)
         self._form_field(form_frame, 3, 2, "Rev (*) (01–99):", self.app_state.rev_var)
 
-        # Hàng 4: PO (tự sinh) | PO chi tiết & PO phụ (tự sinh)
-        self.po_entry = self._form_field(
-            form_frame, 4, 0, "PO (tự sinh):", self.app_state.po_var, is_disabled=True
+        # Hàng 4: PO (tự sinh / mở khóa nhập tay) | PO chi tiết & PO phụ (tự sinh)
+        is_offline = getattr(self.app_state.po_registry, "is_offline_fallback", False)
+        self.po_label = ctk.CTkLabel(
+            form_frame,
+            text="PO (nhập tay - Offline):" if is_offline else "PO (tự sinh):",
+            font=ctk.CTkFont(size=11, weight="bold"),
         )
+        self.po_label.grid(row=4, column=0, sticky="w", padx=(12, 4), pady=2)
+
+        po_box_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+        po_box_frame.grid(row=4, column=1, sticky="ew", padx=(0, 10), pady=2)
+        po_box_frame.grid_columnconfigure(0, weight=1)
+
+        self.po_entry = ctk.CTkEntry(
+            po_box_frame, textvariable=self.app_state.po_var, height=28, font=ctk.CTkFont(size=12)
+        )
+        self.po_entry.grid(row=0, column=0, sticky="ew")
+        self.po_entry.configure(state="normal" if is_offline else "disabled")
+
+        self.btn_unlock_po = ctk.CTkButton(
+            po_box_frame,
+            text="🔒" if is_offline else "🔓",
+            width=28,
+            height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color=("#EF4444", "#DC2626") if is_offline else ("gray85", "gray25"),
+            hover_color=("#DC2626", "#B91C1C") if is_offline else ("gray75", "gray35"),
+            text_color="white" if is_offline else ("gray10", "gray90"),
+            command=self._toggle_manual_po,
+        )
+        self.btn_unlock_po.grid(row=0, column=1, padx=(4, 0))
 
         po_sub_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
         po_sub_frame.grid(row=4, column=2, columnspan=2, sticky="ew", padx=(6, 12), pady=2)
@@ -288,6 +315,23 @@ class DataTabPanel(ctk.CTkFrame):
             normalized = normalized.upper()
         if normalized != variable.get():
             variable.set(normalized)
+
+    def _toggle_manual_po(self) -> None:
+        """Toggle manual PO number input (used when offline or override is requested)."""
+        current_state = str(self.po_entry.cget("state"))
+        is_offline = getattr(self.app_state.po_registry, "is_offline_fallback", False)
+        if current_state == "disabled":
+            self.po_entry.configure(state="normal")
+            self.po_label.configure(text="PO (nhập tay):")
+            self.btn_unlock_po.configure(text="🔒", fg_color=("#F59E0B", "#D97706"), text_color="white")
+            self.po_entry.focus_set()
+        else:
+            if is_offline:
+                # Do not re-lock if in offline mode
+                return
+            self.po_entry.configure(state="disabled")
+            self.po_label.configure(text="PO (tự sinh):")
+            self.btn_unlock_po.configure(text="🔓", fg_color=("gray85", "gray25"), text_color=("gray10", "gray90"))
 
     def set_records(self, select_index: int | None = None) -> None:
         for item in self.preview_tree.get_children():

@@ -33,6 +33,7 @@ class RuntimePaths:
     template_path: Path
     layout_path: Path
     registry_path: Path
+    is_offline_fallback: bool = False
 
 
 AppPaths = RuntimePaths
@@ -103,29 +104,44 @@ def _migrate_registry_if_needed(source: Path, destination: Path) -> None:
             legacy.close()
 
 
-def _resolve_registry_path(data_dir: Path) -> Path:
-    """Resolve PO registry path with env overrides and safe network share fallback.
-
-    Priority:
+def resolve_registry_details(data_dir: Path) -> tuple[Path, bool]:
+    """Resolve the SQLite database path with 4-tier fallback:
     1. INPHIEUHIENVAT_REGISTRY_PATH environment variable (explicit file path).
     2. INPHIEUHIENVAT_DATA_DIR environment variable (isolated test data dir).
     3. Shared network directory (\\\\fstvn01\\Data\\...).
     4. Local application data directory (fallback when network share is unreachable).
+
+    Returns
+    -------
+    tuple[Path, bool]
+        (resolved_path, is_offline_fallback)
     """
     configured_file = os.environ.get(ENV_REGISTRY_PATH, "").strip()
     if configured_file:
-        return Path(configured_file).expanduser().resolve()
+        return Path(configured_file).expanduser().resolve(), False
 
     configured_data_dir = os.environ.get(ENV_DATA_ROOT, "").strip()
     if configured_data_dir:
-        return data_dir / "po_registry.db"
+        return data_dir / "po_registry.db", False
 
     shared_dir = Path(SHARED_REGISTRY_DIR)
     try:
         shared_dir.mkdir(parents=True, exist_ok=True)
-        return shared_dir / "po_registry.db"
+        # Probe access to ensure it's not just a cached UNC failure
+        probe_file = shared_dir / f".probe_access_{os.getpid()}.tmp"
+        probe_file.write_text("ok", encoding="utf-8")
+        probe_file.unlink(missing_ok=True)
+        return shared_dir / "po_registry.db", False
     except (OSError, PermissionError):
-        return data_dir / "po_registry.db"
+        return data_dir / "po_registry.db", True
+
+
+def resolve_registry_path(data_dir: Path) -> Path:
+    path, _ = resolve_registry_details(data_dir)
+    return path
+
+
+_resolve_registry_path = resolve_registry_path
 
 
 def prepare_runtime_paths() -> RuntimePaths:
@@ -145,7 +161,7 @@ def prepare_runtime_paths() -> RuntimePaths:
     _copy_if_missing(install / "layout_config.json", layout)
     _copy_if_missing(assets / "layout_config.json", layout)
 
-    registry = _resolve_registry_path(data)
+    registry, is_offline = resolve_registry_details(data)
     _migrate_registry_if_needed(install / "po_registry.db", registry)
 
     return RuntimePaths(
@@ -156,4 +172,5 @@ def prepare_runtime_paths() -> RuntimePaths:
         template_path=template,
         layout_path=layout,
         registry_path=registry,
+        is_offline_fallback=is_offline,
     )

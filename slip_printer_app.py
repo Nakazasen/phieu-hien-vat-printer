@@ -27,7 +27,10 @@ def main(argv: list[str] | None = None) -> int:
         run_health_check()
         return 0
     if args.wait_for_pid is not None:
-        _wait_for_process_exit(args.wait_for_pid)
+        try:
+            _wait_for_process_exit(args.wait_for_pid)
+        except Exception:  # noqa: BLE001
+            pass
     app = SlipPrinterApp()
     app.mainloop()
     return 0

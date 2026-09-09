@@ -24,7 +24,7 @@ class AppState:
         self.layout_path = self.paths.layout_path
         self.template_path = self.paths.template_path
         self.layout_config = load_layout_config(self.layout_path)
-        self.po_registry = PORegistry(self.paths.registry_path)
+        self.po_registry = PORegistry(self.paths.registry_path, is_offline_fallback=self.paths.is_offline_fallback)
         self.part_master_path = self.paths.data_dir / "part_master.db"
         self.part_master = PartMasterRegistry(self.part_master_path)
 

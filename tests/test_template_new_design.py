@@ -81,6 +81,85 @@ def test_toggle_show_total_qty(sample_record):
     config["options"]["hide_total_qty_on_slip"] = False
     buf = create_overlay_pdf([sample_record], config)
     doc = fitz.open(stream=buf.getvalue(), filetype="pdf")
-    text = doc[0].get_text()
+    page = doc[0]
+    text = page.get_text()
     assert "/" in text
     assert "60" in text
+    assert "20" in text
+
+
+def test_delivery_qty_no_collision_when_total_shown():
+    """Verify that when total_qty is shown, carton_qty is placed to the left of '/', preventing collision."""
+    record = create_record(
+        row_number=1,
+        item_code="3V2ND25400",
+        item_name="ACTUATOR CAM",
+        carton_qty="1600",
+        total_qty="1600",
+        po="1126090905",
+        po_detail="00010",
+        po_sub="+001",
+        box="001/001",
+        rev="01",
+        lot="",
+    )
+    # Test both config where item x=670 and config where item x=705
+    for initial_x in (670, 705):
+        config = get_default_layout_config()
+        config["options"]["hide_total_qty_on_slip"] = False
+        for item in config["text_positions"]:
+            if item.get("id") == "qty_right_1":
+                item["x"] = initial_x
+        buf = create_overlay_pdf([record], config)
+        doc = fitz.open(stream=buf.getvalue(), filetype="pdf")
+        page = doc[0]
+        blocks = page.get_text("blocks")
+        # Extract text elements with their bounding boxes
+        words = page.get_text("words")  # (x0, y0, x1, y1, word, block_no, line_no, word_no)
+        # Find carton qty (1600), slash (/), and total qty (1600) in Delivery QTY row (y ~ 90-110)
+        carton_word = [w for w in words if w[4] == "1600" and 650 <= w[0] < 700 and 80 <= w[1] <= 120]
+        slash_word = [w for w in words if w[4] == "/" and 80 <= w[1] <= 120]
+        total_word = [w for w in words if w[4] == "1600" and w[0] > 720 and 80 <= w[1] <= 120]
+
+        assert len(carton_word) == 1, f"Carton qty not found to left of slash with initial_x={initial_x}"
+        assert len(slash_word) == 1, f"Slash not found with initial_x={initial_x}"
+        assert len(total_word) == 1, f"Total qty not found to right of slash with initial_x={initial_x}"
+
+        # Ensure strict separation (no collision): carton_qty x1 < slash x0 < total_qty x0
+        assert carton_word[0][2] < slash_word[0][0], (
+            f"Collision detected: carton_qty ends at {carton_word[0][2]} but slash starts at {slash_word[0][0]}"
+        )
+        assert slash_word[0][2] < total_word[0][0], (
+            f"Collision detected: slash ends at {slash_word[0][2]} but total_qty starts at {total_word[0][0]}"
+        )
+
+
+def test_template_qc_boxes_expanded():
+    """Verify template.pdf embedded EDI image has expanded QC boxes (>21mm width each)."""
+    import numpy as np
+    from PIL import Image
+
+    doc = fitz.open("template.pdf")
+    page = doc[0]
+    # Extract xref 79 image
+    img_info = doc.extract_image(79)
+    img = Image.open(BytesIO(img_info["image"])).convert("L")
+    arr = np.array(img)
+
+    # In redesigned template:
+    # Outer left of Line QC is at x=625 (55.1mm), mid divider is at x=867 (76.5mm), right is at x=1110 (97.9mm)
+    # Total width = 485 px (42.8mm), each box is ~242 px (21.4mm)
+    # Check vertical lines at x=625, 867, 1110 from y=20 to y=210
+    col_left = (arr[25:215, 625] < 100).sum()
+    col_mid = (arr[25:215, 867] < 100).sum()
+    col_right = (arr[25:215, 1110] < 100).sum()
+
+    assert col_left > 150, f"Left QC box border not found at x=625 (dark count: {col_left})"
+    assert col_mid > 150, f"Middle QC box divider not found at x=867 (dark count: {col_mid})"
+    assert col_right > 150, f"Right QC box border not found at x=1110 (dark count: {col_right})"
+
+    # Verify that the stamping area (y=50 to 200) inside Line QC box is empty (white)
+    stamping_area = arr[50:200, 630:860]
+    dark_pixels = (stamping_area < 100).sum()
+    assert dark_pixels == 0, f"Stamping area in Line QC box is not clean (dark pixels: {dark_pixels})"
+

@@ -88,7 +88,7 @@ DEFAULT_LAYOUT_CONFIG: dict[str, Any] = {
         {"id": "po_sub_right_1", "label": "PO phụ phải 1", "field": "po_sub", "x": 710, "y": 70},
         {"id": "box_right_1", "label": "Box phải 1", "field": "box", "x": 780, "y": 70},
         {"id": "item_name_right_1", "label": "Tên hàng phải 1", "field": "item_name", "x": 650, "y": 85},
-        {"id": "qty_right_1", "label": "SL phải 1", "field": "carton_qty", "x": 705, "y": 100},
+        {"id": "qty_right_1", "label": "SL phải 1", "field": "carton_qty", "x": 670, "y": 100},
         {"id": "qty_right_2", "label": "SL phải 2", "field": "total_qty", "x": 750, "y": 100},
         {"id": "lot_right_1", "label": "Lot phải 1", "field": "lot", "x": 610, "y": 150},
         {"id": "po_bottom", "label": "PO dưới", "field": "po", "x": 380, "y": 380},
@@ -947,7 +947,8 @@ def _draw_record_page(pdf_canvas: canvas.Canvas, record: SlipRecord, layout_conf
                 pdf_canvas.drawCentredString(target_x, height - item["y"], str(record.carton_qty))
                 continue
             else:
-                pdf_canvas.drawString(item["x"], height - item["y"], str(record.carton_qty))
+                left_x = 670 if item["x"] == 705 else item["x"]
+                pdf_canvas.drawString(left_x, height - item["y"], str(record.carton_qty))
                 pdf_canvas.drawCentredString(710, height - item["y"], "/")
                 continue
 

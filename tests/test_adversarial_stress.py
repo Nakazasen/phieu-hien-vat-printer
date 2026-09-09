@@ -56,7 +56,7 @@ def _check_no_zero_or_negative_geometry(widget, path: str = "") -> list[str]:
 
 
 def _get_action_buttons(data_tab: DataTabPanel) -> dict[str, ctk.CTkButton]:
-    """Retrieve all 6 action and utility buttons from DataTabPanel."""
+    """Retrieve all action and utility buttons from DataTabPanel."""
     left_panel = getattr(data_tab, "left_panel", data_tab.winfo_children()[0])
     form_frame = getattr(data_tab, "form_frame", left_panel.winfo_children()[0])
     
@@ -67,7 +67,8 @@ def _get_action_buttons(data_tab: DataTabPanel) -> dict[str, ctk.CTkButton]:
             for btn in child.winfo_children():
                 if isinstance(btn, ctk.CTkButton):
                     text = btn.cget("text")
-                    buttons[text] = btn
+                    if text not in ("🔓", "🔒"):
+                        buttons[text] = btn
     return buttons
 
 

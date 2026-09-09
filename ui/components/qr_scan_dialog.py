@@ -74,14 +74,14 @@ class QRScanPanel(ctk.CTkFrame):
 
         # 1. TOP HEADER & MODE SELECTION
         header_frame = ctk.CTkFrame(self, corner_radius=10)
-        header_frame.grid(row=0, column=0, sticky="ew", padx=16, pady=(16, 8))
+        header_frame.grid(row=0, column=0, sticky="ew", padx=16, pady=(10, 6))
         header_frame.grid_columnconfigure(1, weight=1)
 
         ctk.CTkLabel(
             header_frame,
             text="Nghiệp vụ áp dụng:",
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=0, column=0, padx=(14, 8), pady=12, sticky="w")
+        ).grid(row=0, column=0, padx=(14, 8), pady=8, sticky="w")
 
         self.mode_segment = ctk.CTkSegmentedButton(
             header_frame,
@@ -91,49 +91,50 @@ class QRScanPanel(ctk.CTkFrame):
             selected_color="#2563EB",
         )
         self.mode_segment.set(self.MODE_SPLIT_LABEL)
-        self.mode_segment.grid(row=0, column=1, padx=(0, 14), pady=12, sticky="ew")
+        self.mode_segment.grid(row=0, column=1, padx=(0, 14), pady=8, sticky="ew")
 
         # 2. SCAN INPUT AREA (GUN / PASTE)
         scan_frame = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray90", "gray18"))
-        scan_frame.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 8))
+        scan_frame.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 6))
         scan_frame.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             scan_frame,
             text="📷 Quét mã QR (Súng bắn mã hoặc dán chuỗi QR vào đây):",
             font=ctk.CTkFont(size=12, weight="bold"),
-        ).grid(row=0, column=0, columnspan=2, padx=14, pady=(10, 4), sticky="w")
+        ).grid(row=0, column=0, columnspan=2, padx=14, pady=(8, 2), sticky="w")
 
         self.scan_entry = ctk.CTkEntry(
             scan_frame,
             textvariable=self.scan_input_var,
             placeholder_text="Quét mã QR bằng súng quét hoặc dán chuỗi 129 ký tự rồi nhấn Enter...",
-            height=36,
+            height=34,
             font=ctk.CTkFont(family="Consolas", size=12),
         )
-        self.scan_entry.grid(row=1, column=0, padx=(14, 8), pady=(0, 10), sticky="ew")
+        self.scan_entry.grid(row=1, column=0, padx=(14, 8), pady=(0, 8), sticky="ew")
         self.scan_entry.bind("<Return>", lambda _e: self.process_scanned_code())
 
         self.decode_btn = ctk.CTkButton(
             scan_frame,
             text="📖 Đọc tem",
             width=90,
-            height=36,
+            height=34,
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self.process_scanned_code,
         )
-        self.decode_btn.grid(row=1, column=1, padx=(0, 14), pady=(0, 10))
+        self.decode_btn.grid(row=1, column=1, padx=(0, 14), pady=(0, 8))
 
-        # 3. DECODED DETAILS & EDIT FORM
-        form_frame = ctk.CTkFrame(self, corner_radius=10)
-        form_frame.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 8))
+        # 3. DECODED DETAILS & EDIT FORM (SCROLLABLE, NEVER CUT OFF)
+        self.form_frame = ctk.CTkScrollableFrame(self, corner_radius=10)
+        form_frame = self.form_frame
+        form_frame.grid(row=2, column=0, sticky="nsew", padx=16, pady=(0, 6))
         form_frame.grid_columnconfigure((1, 3), weight=1)
 
         ctk.CTkLabel(
             form_frame,
             text="Chi tiết thông tin tem sau khi bóc tách & chuyển đổi:",
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=0, column=0, columnspan=4, padx=14, pady=(10, 6), sticky="w")
+        ).grid(row=0, column=0, columnspan=4, padx=14, pady=(8, 4), sticky="w")
 
         # Row 1: Item code & Item name
         self._add_field(form_frame, 1, 0, "Mã hàng (*):", self.item_code_var)
@@ -183,7 +184,7 @@ class QRScanPanel(ctk.CTkFrame):
 
         # 4. FOOTER & ACTIONS
         footer_frame = ctk.CTkFrame(self, corner_radius=10, fg_color="transparent")
-        footer_frame.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 14))
+        footer_frame.grid(row=3, column=0, sticky="ew", padx=16, pady=(4, 10))
         footer_frame.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
@@ -191,7 +192,7 @@ class QRScanPanel(ctk.CTkFrame):
             textvariable=self.status_msg_var,
             font=ctk.CTkFont(size=12),
             text_color=("gray40", "gray60"),
-        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+        ).grid(row=0, column=0, sticky="w", pady=(0, 4))
 
         btn_row = ctk.CTkFrame(footer_frame, fg_color="transparent")
         btn_row.grid(row=1, column=0, sticky="ew")

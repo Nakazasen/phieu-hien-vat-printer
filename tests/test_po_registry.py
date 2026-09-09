@@ -241,5 +241,34 @@ def test_po_registry_busy_retry_with_auto_recovery(tmp_path):
         reg.close()
 
 
+def test_po_generation_blocked_when_offline(tmp_path):
+    """Verify that generate_po raises OfflinePOGenerationBlockedError when in offline fallback."""
+    from core.po_registry import OfflinePOGenerationBlockedError
+
+    offline_db = tmp_path / "offline.db"
+    reg = PORegistry(offline_db, is_offline_fallback=True)
+    try:
+        assert reg.is_offline_fallback is True
+        with pytest.raises(OfflinePOGenerationBlockedError) as exc_info:
+            reg.generate_po()
+        assert "MẤT KẾT NỐI MẠNG LAN" in str(exc_info.value)
+        assert issubclass(OfflinePOGenerationBlockedError, ValueError)
+
+        # But existing combos can still be registered offline without error
+        reg.register_combo("1126090999", "00010", "+001", "001/001")
+        history = reg.fetch_history()
+        assert len(history) == 1
+        assert history[0]["po"] == "1126090999"
+    finally:
+        reg.close()
 
 
+def test_po_generation_allowed_when_online(tmp_path):
+    """Verify that generate_po succeeds normally when not in offline fallback."""
+    online_db = tmp_path / "online.db"
+    reg = PORegistry(online_db, is_offline_fallback=False)
+    try:
+        po = reg.generate_po()
+        assert po.startswith("11")
+    finally:
+        reg.close()

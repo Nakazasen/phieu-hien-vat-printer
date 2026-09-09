@@ -42,6 +42,10 @@ class DailySequenceExhaustedError(PORegistryError):
     """Raised when the daily NN sequence exceeds 99."""
 
 
+class OfflinePOGenerationBlockedError(PORegistryError, ValueError):
+    """Raised when attempting to auto-generate a PO while offline to prevent duplicate PO collisions."""
+
+
 class PORegistry:
     """SQLite-backed PO number generator and uniqueness enforcer.
 
@@ -51,8 +55,9 @@ class PORegistry:
         Path to the SQLite database file.  Use ``":memory:"`` for tests.
     """
 
-    def __init__(self, db_path: str | Path) -> None:
+    def __init__(self, db_path: str | Path, *, is_offline_fallback: bool = False) -> None:
         self._db_path = str(db_path)
+        self.is_offline_fallback = is_offline_fallback
         self._init_connection()
 
     def _setup_pragmas(self) -> None:
@@ -175,9 +180,6 @@ class PORegistry:
     # ------------------------------------------------------------------
 
     def generate_po(self, target_date: date | None = None) -> str:
-        return self._execute_with_auto_recovery(lambda: self._generate_po_impl(target_date))
-
-    def _generate_po_impl(self, target_date: date | None = None) -> str:
         """Generate the next PO number for *target_date* (default: today).
 
         Format: ``11YYMMDDNN``
@@ -187,9 +189,16 @@ class PORegistry:
 
         Raises
         ------
+        OfflinePOGenerationBlockedError
+            If running in offline fallback mode without LAN database connectivity.
         DailySequenceExhaustedError
             If NN would exceed 99 for the given date.
         """
+        if self.is_offline_fallback:
+            raise OfflinePOGenerationBlockedError(
+                "MẤT KẾT NỐI MẠNG LAN: Không thể tự sinh số PO khi mất kết nối cơ sở dữ liệu LAN dùng chung để tránh trùng lặp."
+            )
+
         if target_date is None:
             target_date = datetime.now().date()
 

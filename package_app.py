@@ -312,7 +312,7 @@ def verify_writable_share(folder: Path) -> None:
         probe_file.unlink(missing_ok=True)
 
 
-def publish_setup(setup_exe: Path, publish_dir: Path) -> Path:
+def publish_setup(setup_exe: Path, publish_dir: Path, *, force: bool = False) -> Path:
     """Publish Setup installer (.exe) to the LAN software directory using atomic .part copy."""
     if not setup_exe.is_file():
         raise FileNotFoundError(f"Không tìm thấy file Setup để phát hành: {setup_exe}")
@@ -322,7 +322,9 @@ def publish_setup(setup_exe: Path, publish_dir: Path) -> Path:
         if _sha256(destination) == _sha256(setup_exe):
             print(f"Setup {setup_exe.name} đã tồn tại trên LAN với hash trùng khớp; bỏ qua copy.")
             return destination
-        raise RuntimeError(f"Setup {setup_exe.name} đã tồn tại trên LAN nhưng khác hash! Dừng để tránh ghi đè artifact lịch sử.")
+        if not force:
+            raise RuntimeError(f"Setup {setup_exe.name} đã tồn tại trên LAN nhưng khác hash! Dừng để tránh ghi đè artifact lịch sử.")
+        print(f"Ghi đè Setup {setup_exe.name} trên LAN theo cờ --force.")
     setup_part = publish_dir / f"{setup_exe.name}.part"
     try:
         shutil.copyfile(setup_exe, setup_part)
@@ -337,7 +339,7 @@ def publish_setup(setup_exe: Path, publish_dir: Path) -> Path:
         raise
 
 
-def publish_update(package_path: Path, publish_dir: Path, *, notes: str) -> tuple[Path, Path]:
+def publish_update(package_path: Path, publish_dir: Path, *, notes: str, force: bool = False) -> tuple[Path, Path]:
     release = _release()
     if package_path.suffix.casefold() != ".phieuupdate" or not package_path.is_file():
         raise ValueError("Không tìm thấy package .phieuupdate hợp lệ")
@@ -345,11 +347,16 @@ def publish_update(package_path: Path, publish_dir: Path, *, notes: str) -> tupl
         raise ValueError("Release note dài quá 2000 ký tự")
     verify_writable_share(publish_dir)
     destination = publish_dir / package_path.name
+    need_copy = True
     if destination.is_file():
-        if _sha256(destination) != _sha256(package_path):
-            raise RuntimeError(f"Package {destination.name} đã tồn tại trên LAN nhưng khác hash! Dừng để tránh ghi đè artifact lịch sử.")
-        print(f"Package {package_path.name} đã tồn tại trên LAN với hash trùng khớp.")
-    else:
+        if _sha256(destination) == _sha256(package_path):
+            print(f"Package {package_path.name} đã tồn tại trên LAN với hash trùng khớp.")
+            need_copy = False
+        else:
+            if not force:
+                raise RuntimeError(f"Package {destination.name} đã tồn tại trên LAN nhưng khác hash! Dừng để tránh ghi đè artifact lịch sử.")
+            print(f"Ghi đè Package {destination.name} trên LAN theo cờ --force.")
+    if need_copy:
         package_part = publish_dir / f"{package_path.name}.part"
         try:
             shutil.copyfile(package_path, package_part)
@@ -390,6 +397,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--release-notes", default="")
     parser.add_argument("--compile-installer", action="store_true", help="Chỉ chạy bước biên dịch Inno Setup (.iss)")
     parser.add_argument("--no-installer", action="store_true", help="Bỏ qua bước gọi Inno Setup khi đóng gói")
+    parser.add_argument("--force", action="store_true", help="Cho phép ghi đè artifact nếu đã tồn tại trên LAN")
     return parser.parse_args(argv)
 
 
@@ -405,7 +413,7 @@ def main(argv: list[str] | None = None) -> int:
             release = _release()
             setup_exe = RELEASE_ARTIFACTS / f"{APP_NAME}_Setup_{release['version']}.exe"
             if setup_exe.is_file():
-                published_setup = publish_setup(setup_exe, setup_dir)
+                published_setup = publish_setup(setup_exe, setup_dir, force=args.force)
                 print(f"Đã phát hành Setup lên LAN: {published_setup}")
         return 0
     if not args.min_app_version:
@@ -431,7 +439,7 @@ def main(argv: list[str] | None = None) -> int:
 
     update_dir = Path(args.publish_dir or (DEFAULT_LAN_UPDATE_DIR if args.publish_lan else "")) if (args.publish_dir or args.publish_lan) else None
     if update_dir:
-        published, catalog = publish_update(artifact, update_dir, notes=args.release_notes)
+        published, catalog = publish_update(artifact, update_dir, notes=args.release_notes, force=args.force)
         print(f"Đã phát hành gói cập nhật: {published}")
         print(f"Đã phát hành catalog: {catalog}")
 
@@ -441,7 +449,7 @@ def main(argv: list[str] | None = None) -> int:
         if not setup_exe.is_file():
             compile_installer()
         if setup_exe.is_file():
-            published_setup = publish_setup(setup_exe, setup_dir)
+            published_setup = publish_setup(setup_exe, setup_dir, force=args.force)
             print(f"Đã phát hành Setup lên LAN: {published_setup}")
     return 0
 
