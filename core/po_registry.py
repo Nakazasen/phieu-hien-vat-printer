@@ -97,8 +97,7 @@ class PORegistry:
                 raise
 
     def _recover_corrupted_database(self, cause: Exception) -> None:
-        """Safely backup a malformed database and rebuild a clean registry."""
-        try:
+        """Safely backup a malformed database and rebuild a clean registry.
             if hasattr(self, "_conn") and self._conn is not None:
                 self._conn.close()
         except Exception:  # noqa: BLE001
@@ -133,7 +132,7 @@ class PORegistry:
         """Execute a database function with retry on busy/locked and auto-healing on corruption."""
         max_retries = 5
         base_delay = 0.05
-        for attempt in range(max_retries):
+        is_network = self._db_path.startswith(r"\\") or self._db_path.startswith("//")
             try:
                 return func()
             except sqlite3.OperationalError as exc:
@@ -143,13 +142,10 @@ class PORegistry:
                         continue
                 raise
             except sqlite3.DatabaseError as exc:
-                if self._db_path != ":memory:" and any(
-                    keyword in str(exc).lower()
-                    for keyword in ("malformed", "corrupt", "disk image", "not a database")
-                ):
-                    self._recover_corrupted_database(exc)
-                    return func()
-                raise
+                if (
+                    not is_network
+                    and self._db_path != ":memory:"
+                    and any(
 
     # ------------------------------------------------------------------
     # Schema
@@ -207,69 +203,42 @@ class PORegistry:
         mm = target_date.strftime("%m")
         dd = target_date.strftime("%d")
 
-        cursor = self._conn.cursor()
-        try:
-            cursor.execute("BEGIN IMMEDIATE")
+        def _do_generate() -> int:
+            cursor = self._conn.cursor()
+            try:
+                cursor.execute("BEGIN IMMEDIATE")
 
-            row = cursor.execute(
-                "SELECT next_nn FROM po_sequence WHERE date_key = ?",
-                (date_key,),
-            ).fetchone()
-
-            if row is None:
-                nn = 1
-                cursor.execute(
-                    "INSERT INTO po_sequence (date_key, next_nn) VALUES (?, ?)",
-                    (date_key, nn + 1),
-                )
-            else:
-                nn = row[0]
-                if nn > MAX_NN:
-                    raise DailySequenceExhaustedError(
-                        f"Đã hết số thứ tự PO trong ngày {target_date.isoformat()} "
-                        f"(tối đa {MAX_NN:02d})."
+                row = cursor.execute(
+                    "SELECT next_nn FROM po_sequence WHERE date_key = ?",
+                    nn = 1
+                    cursor.execute(
+                        "INSERT INTO po_sequence (date_key, next_nn) VALUES (?, ?)",
+                        (date_key, nn + 1),
                     )
-                cursor.execute(
-                    "UPDATE po_sequence SET next_nn = ? WHERE date_key = ?",
-                    (nn + 1, date_key),
-                )
+                            f"Đã hết số thứ tự PO trong ngày {target_date.isoformat()} "
+                            f"(tối đa {MAX_NN:02d})."
+                        )
+                    cursor.execute(
+                        "UPDATE po_sequence SET next_nn = ? WHERE date_key = ?",
+                        (nn + 1, date_key),
+                    )
 
-            self._conn.commit()
-        except Exception:
-            self._conn.rollback()
-            raise
-
-        return f"{AUTO_PO_PREFIX}{yy}{mm}{dd}{nn:02d}"
-
-    # ------------------------------------------------------------------
+                self._conn.commit()
+                return nn
+            except Exception:
+                self._conn.rollback()
+                raise
     # Uniqueness enforcement
     # ------------------------------------------------------------------
 
     def register_combo(
         self,
-        po: str,
-        po_detail: str,
-        po_sub: str,
-        box: str,
-    ) -> None:
-        """Register a ``(po, po_detail, po_sub, box)`` combination.
-
-        Raises
-        ------
-        DuplicateComboError
-            If the exact combination already exists in the registry.
         """
         return self._execute_with_auto_recovery(
             lambda: self._register_combo_impl(po, po_detail, po_sub, box)
         )
 
-    def _register_combo_impl(
-        self,
-        po: str,
-        po_detail: str,
-        po_sub: str,
         box: str,
-    ) -> None:
         try:
             self._conn.execute(
                 "INSERT INTO po_registry (po, po_detail, po_sub, box) "
@@ -361,9 +330,16 @@ class PORegistry:
 
         Raises
         ------
+        OfflinePOGenerationBlockedError
+            If running in offline fallback mode without LAN database connectivity.
         PORegistryError
             If all 9 split detail slots (10010 through 90010) have been exhausted for the given PO.
         """
+        if self.is_offline_fallback:
+            raise OfflinePOGenerationBlockedError(
+                "MẤT KẾT NỐI MẠNG LAN: Không thể tự sinh mã PO chi tiết khi mất kết nối cơ sở dữ liệu LAN dùng chung để tránh trùng lặp mã tem."
+            )
+
         base_detail = self._normalize_operation_detail(base_detail)
         suffix = base_detail[2:]
         used = set(self.get_used_po_details(po)) | set(exclude_details)
@@ -385,14 +361,14 @@ class PORegistry:
         """Generate a return detail by incrementing D2 on the scanned branch.
 
         Returning preserves D1 and D3-D5 from the scanned label.  Thus
-        ``10010`` becomes ``11010``, ``20010`` becomes ``21010``, and a
-        later return of ``11010`` becomes ``12010``.
 
         Raises
         ------
-        PORegistryError
-            If all 9 return detail slots (11010 through 91010) have been exhausted for the given PO.
-        """
+        if self.is_offline_fallback:
+            raise OfflinePOGenerationBlockedError(
+                "MẤT KẾT NỐI MẠNG LAN: Không thể tự sinh mã PO chi tiết khi mất kết nối cơ sở dữ liệu LAN dùng chung để tránh trùng lặp mã tem."
+            )
+
         base_detail = self._normalize_operation_detail(base_detail)
         d1 = base_detail[0]
         suffix = base_detail[2:]
@@ -414,16 +390,9 @@ class PORegistry:
         if len(detail) != 5 or not detail.isdigit():
             raise PORegistryError(
                 f"Mã PO chi tiết phải gồm đúng 5 chữ số, nhận được: {base_detail!r}."
-            )
-        return detail
 
     # ------------------------------------------------------------------
     # Diagnostics
-    # ------------------------------------------------------------------
-
-    def count_registered(self) -> int:
-        """Return the total number of registered combos."""
-        return self._execute_with_auto_recovery(
             lambda: (self._conn.execute("SELECT COUNT(*) FROM po_registry").fetchone() or [0])[0]
         )
 

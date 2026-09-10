@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections import Counter
 from tkinter import ttk
 from typing import Optional
@@ -5,6 +7,7 @@ from typing import Optional
 import customtkinter as ctk
 
 from core.po_registry import FIXED_PO_DETAIL, FIXED_PO_SUB
+from core.slip_printer_engine import SlipRecord
 from ui.app_controller import AppController
 
 
@@ -94,12 +97,12 @@ class DataTabPanel(ctk.CTkFrame):
 
         self.btn_unlock_po = ctk.CTkButton(
             po_box_frame,
-            text="🔒" if is_offline else "🔓",
+            text="✏️" if is_offline else "🔓",
             width=28,
             height=28,
             font=ctk.CTkFont(size=11),
-            fg_color=("#EF4444", "#DC2626") if is_offline else ("gray85", "gray25"),
-            hover_color=("#DC2626", "#B91C1C") if is_offline else ("gray75", "gray35"),
+            fg_color=("#2563EB", "#1D4ED8") if is_offline else ("gray85", "gray25"),
+            hover_color=("#1D4ED8", "#1E40AF") if is_offline else ("gray75", "gray35"),
             text_color="white" if is_offline else ("gray10", "gray90"),
             command=self._toggle_manual_po,
         )
@@ -318,22 +321,33 @@ class DataTabPanel(ctk.CTkFrame):
 
     def _toggle_manual_po(self) -> None:
         """Toggle manual PO number input (used when offline or override is requested)."""
-        current_state = str(self.po_entry.cget("state"))
         is_offline = getattr(self.app_state.po_registry, "is_offline_fallback", False)
+        if is_offline:
+            messagebox.showinfo(
+                "Chế độ ngoại tuyến (Offline)",
+                "Do mất kết nối cơ sở dữ liệu LAN dùng chung, ô nhập PO đã được mở sẵn "
+                "để Quản lý có thể nhập số PO thủ công.\n\n"
+                "👉 Hãy nhập số PO được cấp vào ô 'PO (nhập tay)' trước khi thêm dòng.",
+            )
+            return
+
+        current_state = str(self.po_entry.cget("state"))
         if current_state == "disabled":
             self.po_entry.configure(state="normal")
             self.po_label.configure(text="PO (nhập tay):")
             self.btn_unlock_po.configure(text="🔒", fg_color=("#F59E0B", "#D97706"), text_color="white")
+            self.app_state.manual_po_override = True
             self.po_entry.focus_set()
         else:
-            if is_offline:
-                # Do not re-lock if in offline mode
-                return
             self.po_entry.configure(state="disabled")
             self.po_label.configure(text="PO (tự sinh):")
             self.btn_unlock_po.configure(text="🔓", fg_color=("gray85", "gray25"), text_color=("gray10", "gray90"))
+            self.app_state.manual_po_override = False
+            self.app_state.po_var.set("")
 
-    def set_records(self, select_index: int | None = None) -> None:
+    def set_records(self, records: list[SlipRecord] | None = None, select_index: int | None = None) -> None:
+        if records is not None:
+            self.app_state.records = records
         for item in self.preview_tree.get_children():
             self.preview_tree.delete(item)
 
@@ -511,7 +525,7 @@ class DataTabPanel(ctk.CTkFrame):
         self.preview_image_label.configure(image=None)
 
     def refresh_preview_image(self) -> None:
-        if self.controller.view:
+        if self.controller.view and self.controller.view is not self:
             self.controller.view.refresh_preview_image()
 
     def has_pending_form_changes(self) -> bool:

@@ -175,4 +175,75 @@ def test_theme_mode_switching_and_persistence(tk_root):
         state.po_registry.close()
 
 
+def test_add_record_po_sticky_leak_prevented(tk_root):
+    """Verify that adding sequential records does not stick the first record's PO onto the second."""
+    root = tk_root
+    state = AppState(root)
+    controller = AppController(state)
+    try:
+        notebook = ttk.Notebook(root)
+        tab = DataTabPanel(notebook, controller)
+        controller.view = tab
+
+        # Set first record data
+        state.item_code_var.set("ITEM-001")
+        state.item_name_var.set("Product 001")
+        state.carton_qty_var.set("10")
+        state.box_var.set("1")
+        state.rev_var.set("01")
+        state.po_var.set("")  # Empty -> auto-generate
+
+        controller.add_record()
+        assert len(state.records) == 1
+        first_po = state.records[0].po
+        assert first_po.startswith("11")
+
+        # The form displays the selected row (first_po)
+        assert state.po_var.get() == first_po
+
+        # Set second record data without manual form clear (simulating user immediately adding next item)
+        state.item_code_var.set("ITEM-002")
+        state.item_name_var.set("Product 002")
+        state.carton_qty_var.set("20")
+        state.box_var.set("1")
+        state.rev_var.set("01")
+
+        controller.add_record()
+        assert len(state.records) == 2
+        second_po = state.records[1].po
+        assert second_po.startswith("11")
+        # Critical verification: second PO must NOT be identical to first PO
+        assert second_po != first_po, f"PO sticky leak! {second_po} == {first_po}"
+    finally:
+        state.po_registry.close()
+
+
+def test_toggle_manual_po(tk_root):
+    """Verify manual PO unlock toggle button changes state and syncs manual_po_override."""
+    root = tk_root
+    state = AppState(root)
+    controller = AppController(state)
+    try:
+        notebook = ttk.Notebook(root)
+        tab = DataTabPanel(notebook, controller)
+
+        # Initial online state: disabled, override False
+        assert tab.po_entry.cget("state") == "disabled"
+        assert state.manual_po_override is False
+
+        # Toggle to unlock
+        tab._toggle_manual_po()
+        assert tab.po_entry.cget("state") == "normal"
+        assert state.manual_po_override is True
+        assert tab.btn_unlock_po.cget("text") == "🔒"
+
+        # Toggle to lock back
+        tab._toggle_manual_po()
+        assert tab.po_entry.cget("state") == "disabled"
+        assert state.manual_po_override is False
+        assert tab.btn_unlock_po.cget("text") == "🔓"
+    finally:
+        state.po_registry.close()
+
+
 

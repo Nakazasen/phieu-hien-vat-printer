@@ -644,16 +644,14 @@ def _is_pid_alive(pid: int) -> bool:
             import ctypes
             PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
             SYNCHRONIZE = 0x00100000
-            STILL_ACTIVE = 259
+            WAIT_TIMEOUT = 0x00000102
             kernel32 = ctypes.windll.kernel32
             handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, pid)
             if not handle:
                 return False
             try:
-                exit_code = ctypes.c_ulong()
-                if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-                    return exit_code.value == STILL_ACTIVE
-                return False
+                wait_res = kernel32.WaitForSingleObject(handle, 0)
+                return wait_res == WAIT_TIMEOUT
             finally:
                 kernel32.CloseHandle(handle)
         except Exception:
@@ -662,12 +660,12 @@ def _is_pid_alive(pid: int) -> bool:
     try:
         os.kill(pid, 0)
         return True
-    except (ProcessLookupError, PermissionError):
+    except PermissionError:
+        # Process exists but caller lacks permission to signal it
+        return True
+    except ProcessLookupError:
         return False
     except OSError as exc:
-        # On Windows, os.kill on an already-exited or terminated process can raise:
-        # WinError 87: ERROR_INVALID_PARAMETER
-        # WinError 6: ERROR_INVALID_HANDLE
         winerror = getattr(exc, "winerror", None)
         if winerror in (6, 87) or exc.errno in (errno.ESRCH, errno.EINVAL):
             return False

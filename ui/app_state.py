@@ -27,6 +27,7 @@ class AppState:
         self.po_registry = PORegistry(self.paths.registry_path, is_offline_fallback=self.paths.is_offline_fallback)
         self.part_master_path = self.paths.data_dir / "part_master.db"
         self.part_master = PartMasterRegistry(self.part_master_path)
+        self.manual_po_override: bool = self.paths.is_offline_fallback
 
         # In-memory data
         self.records: list[SlipRecord] = []

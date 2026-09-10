@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from tkinter import filedialog, messagebox
 
-from core.po_registry import FIXED_PO_DETAIL, FIXED_PO_SUB
+from core.po_registry import FIXED_PO_DETAIL, FIXED_PO_SUB, OfflinePOGenerationBlockedError
 from core.slip_printer_engine import (
     START_ROW,
     SlipRecord,
@@ -260,7 +260,7 @@ class AppController:
 
             boxes = expand_box_sequence(box_input)
 
-            if not po:
+            if not getattr(self.app_state, "manual_po_override", False) or not po:
                 po = self.app_state.po_registry.generate_po()
                 po_detail = FIXED_PO_DETAIL
                 po_sub = FIXED_PO_SUB
@@ -288,6 +288,15 @@ class AppController:
                     lot=self.app_state.lot_var.get(),
                 )
                 new_records.append(rec)
+        except OfflinePOGenerationBlockedError as exc:
+            messagebox.showerror(
+                APP_TITLE,
+                f"Không thể tự động sinh số PO:\n{exc}\n\n"
+                "👉 Hướng dẫn:\n"
+                "- Do mất kết nối cơ sở dữ liệu LAN dùng chung, tính năng tự sinh số PO đã bị khóa để tránh trùng lặp.\n"
+                "- Vui lòng kiểm tra lại dây mạng LAN hoặc bấm nút '🔓' bên cạnh ô PO để nhập số PO thủ công do Quản lý cấp.",
+            )
+            return
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
                 APP_TITLE,
@@ -334,14 +343,23 @@ class AppController:
                 self.app_state.part_master.upsert(item_code, item_name, rev)
             except ValueError:
                 pass
+
+        # Reset PO form fields if not in manual edit mode so next record gets a fresh auto PO
+        if not getattr(self.app_state, "manual_po_override", False):
+            self.app_state.po_var.set("")
+            self.app_state.po_detail_var.set("")
+            self.app_state.po_sub_var.set("")
+
         if self.view:
-            if len(new_records) == 1:
-                self.view.append_log(f"Đã thêm dòng {new_records[0].row_number}: {new_records[0].item_code}")
-            else:
-                self.view.append_log(
-                    f"Đã thêm {len(new_records)} dòng tem (Box {new_records[0].box} - {new_records[-1].box}): {item_code} (PO: {po})"
-                )
-            self.view.set_records(self.app_state.records, select_index=len(self.app_state.records) - 1)
+            if hasattr(self.view, "append_log"):
+                if len(new_records) == 1:
+                    self.view.append_log(f"Đã thêm dòng {new_records[0].row_number}: {new_records[0].item_code}")
+                else:
+                    self.view.append_log(
+                        f"Đã thêm {len(new_records)} dòng tem (Box {new_records[0].box} - {new_records[-1].box}): {item_code} (PO: {po})"
+                    )
+            if hasattr(self.view, "set_records"):
+                self.view.set_records(self.app_state.records, select_index=len(self.app_state.records) - 1)
 
     def update_selected_record(self) -> None:
         if not self.app_state.records:

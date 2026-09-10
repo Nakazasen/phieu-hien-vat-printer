@@ -11,6 +11,7 @@ import os
 import shutil
 import sqlite3
 import sys
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -127,10 +128,15 @@ def resolve_registry_details(data_dir: Path) -> tuple[Path, bool]:
     shared_dir = Path(SHARED_REGISTRY_DIR)
     try:
         shared_dir.mkdir(parents=True, exist_ok=True)
-        # Probe access to ensure it's not just a cached UNC failure
-        probe_file = shared_dir / f".probe_access_{os.getpid()}.tmp"
+        # Probe access with a unique filename to avoid collision across machines
+        probe_file = shared_dir / f".probe_access_{uuid.uuid4().hex}.tmp"
         probe_file.write_text("ok", encoding="utf-8")
-        probe_file.unlink(missing_ok=True)
+        try:
+            probe_file.unlink(missing_ok=True)
+        except OSError:
+            # Successfully writing confirms share access; temporary file locking during unlink
+            # (e.g. background antivirus scanning) should not falsely trigger offline mode.
+            pass
         return shared_dir / "po_registry.db", False
     except (OSError, PermissionError):
         return data_dir / "po_registry.db", True

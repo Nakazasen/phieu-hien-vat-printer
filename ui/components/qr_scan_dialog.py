@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 from tkinter import messagebox
 import customtkinter as ctk
 
+from core.po_registry import OfflinePOGenerationBlockedError
+
 from core.slip_printer_engine import (
     FIXED_PO_SUB,
     START_ROW,
@@ -322,6 +324,16 @@ class QRScanPanel(ctk.CTkFrame):
                 )
             else:
                 detail = source_detail
+        except OfflinePOGenerationBlockedError as exc:
+            messagebox.showerror(
+                "Mất kết nối CSDL mạng LAN",
+                f"Không thể tự động sinh mã PO chi tiết khi mất mạng LAN:\n{exc}\n\n"
+                "👉 Hướng dẫn: Để tránh trùng lặp mã tem phân tách/hoàn kho với máy trạm khác, tính năng tự sinh mã PO chi tiết bị khóa khi offline.\n"
+                "Vui lòng kiểm tra lại dây mạng LAN hoặc nhập thủ công mã PO chi tiết được cấp vào ô 'PO chi tiết mới'.",
+            )
+            self.status_msg_var.set("🔴 Mất kết nối LAN - Khóa tự sinh PO chi tiết")
+            detail = self.po_detail_var.get() or "00010"
+            error = True
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
                 "Vượt quá giới hạn PO chi tiết",

@@ -272,3 +272,37 @@ def test_po_generation_allowed_when_online(tmp_path):
         assert po.startswith("11")
     finally:
         reg.close()
+
+
+def test_split_and_return_detail_blocked_when_offline(tmp_path):
+    """Verify that generate_split_po_detail and generate_return_po_detail raise OfflinePOGenerationBlockedError when offline."""
+    from core.po_registry import OfflinePOGenerationBlockedError
+
+    offline_db = tmp_path / "offline.db"
+    reg = PORegistry(offline_db, is_offline_fallback=True)
+    try:
+        with pytest.raises(OfflinePOGenerationBlockedError) as exc1:
+            reg.generate_split_po_detail("1126091001", "00010")
+        assert "MẤT KẾT NỐI MẠNG LAN" in str(exc1.value)
+
+        with pytest.raises(OfflinePOGenerationBlockedError) as exc2:
+            reg.generate_return_po_detail("1126091001", "10010")
+        assert "MẤT KẾT NỐI MẠNG LAN" in str(exc2.value)
+    finally:
+        reg.close()
+
+
+def test_network_database_corruption_recovery_blocked(monkeypatch):
+    """Verify that _recover_corrupted_database refuses to rename/wipe database on network UNC shares."""
+    import sqlite3
+    from core.po_registry import PORegistry
+
+    network_unc = r"\\fstvn01\Data\test_shared.db"
+    # Create instance with dummy unc path without opening real connection
+    reg = object.__new__(PORegistry)
+    reg._db_path = network_unc
+    reg.is_offline_fallback = False
+
+    with pytest.raises(sqlite3.DatabaseError) as exc_info:
+        reg._recover_corrupted_database(sqlite3.DatabaseError("database disk image is malformed"))
+    assert "từ chối tự động khởi tạo lại" in str(exc_info.value)

@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 from copy import deepcopy
 import pytest
 import fitz
@@ -139,7 +140,8 @@ def test_template_qc_boxes_expanded():
     import numpy as np
     from PIL import Image
 
-    doc = fitz.open("template.pdf")
+    template_path = Path(__file__).resolve().parent.parent / "template.pdf"
+    doc = fitz.open(template_path)
     page = doc[0]
     # Extract xref 79 image
     img_info = doc.extract_image(79)
