@@ -5,6 +5,7 @@ from tkinter import messagebox
 import customtkinter as ctk
 
 from core.po_registry import OfflinePOGenerationBlockedError
+from ui.app_controller import format_error_for_user
 
 from core.slip_printer_engine import (
     FIXED_PO_SUB,
@@ -216,7 +217,7 @@ class QRScanPanel(ctk.CTkFrame):
 
             ctk.CTkButton(
                 btn_row,
-                text="📋 Điền vào Form chính",
+                text="📋 Điền vào biểu mẫu chính",
                 height=36,
                 font=ctk.CTkFont(size=12, weight="bold"),
                 fg_color="#2563EB",
@@ -240,7 +241,7 @@ class QRScanPanel(ctk.CTkFrame):
 
             ctk.CTkButton(
                 btn_row,
-                text="📋 Điền vào Form chính",
+                text="📋 Điền vào biểu mẫu chính",
                 height=36,
                 font=ctk.CTkFont(size=12, weight="bold"),
                 fg_color="#2563EB",
@@ -326,9 +327,9 @@ class QRScanPanel(ctk.CTkFrame):
                 detail = source_detail
         except OfflinePOGenerationBlockedError as exc:
             messagebox.showerror(
-                "Mất kết nối CSDL mạng LAN",
-                f"Không thể tự động sinh mã PO chi tiết khi mất mạng LAN:\n{exc}\n\n"
-                "👉 Hướng dẫn: Để tránh trùng lặp mã tem phân tách/hoàn kho với máy trạm khác, tính năng tự sinh mã PO chi tiết bị khóa khi offline.\n"
+                "Mất kết nối CSDL LAN",
+                f"Không thể tự động sinh mã PO chi tiết khi mất mạng LAN:\n{format_error_for_user(exc, 'tạo mã PO chi tiết')}\n\n"
+                "👉 Hướng dẫn: Để tránh trùng lặp mã tem phân tách/hoàn kho với máy trạm khác, tính năng tự sinh mã PO chi tiết bị khóa khi ngoại tuyến.\n"
                 "Vui lòng kiểm tra lại dây mạng LAN hoặc nhập thủ công mã PO chi tiết được cấp vào ô 'PO chi tiết mới'.",
             )
             self.status_msg_var.set("🔴 Mất kết nối LAN - Khóa tự sinh PO chi tiết")
@@ -337,10 +338,10 @@ class QRScanPanel(ctk.CTkFrame):
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
                 "Vượt quá giới hạn PO chi tiết",
-                f"Không thể tự động sinh PO chi tiết mới cho số PO '{po}':\n{exc}\n\n"
+                f"Không thể tự động sinh PO chi tiết mới cho số PO '{po}':\n{format_error_for_user(exc, 'tạo mã PO chi tiết')}\n\n"
                 "👉 Hướng dẫn: Đã đạt số lượng phân tách/hoàn kho tối đa cho số PO này. Vui lòng kiểm tra lại lịch sử đăng ký hoặc sử dụng số PO mới.",
             )
-            self.status_msg_var.set(f"⚠️ {exc}")
+            self.status_msg_var.set(f"⚠️ {format_error_for_user(exc, 'tạo mã PO chi tiết')}")
             detail = self.po_detail_var.get() or "00010"
             error = True
 
@@ -370,10 +371,10 @@ class QRScanPanel(ctk.CTkFrame):
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
                 "Lỗi giải mã mã QR",
-                f"Chuỗi mã QR không đúng định dạng tiêu chuẩn (129 ký tự):\n{exc}\n\n"
+                f"Chuỗi mã QR không đúng định dạng tiêu chuẩn (129 ký tự):\n{format_error_for_user(exc, 'đọc mã QR')}\n\n"
                 "👉 Hướng dẫn: Vui lòng kiểm tra lại tem hiện vật gốc hoặc thực hiện quét lại mã QR.",
             )
-            self.status_msg_var.set(f"Lỗi: {exc}")
+            self.status_msg_var.set(f"Lỗi: {format_error_for_user(exc, 'đọc mã QR')}")
             return
 
         item_name = ""
@@ -471,6 +472,19 @@ class QRScanPanel(ctk.CTkFrame):
         boxes = expand_box_sequence(box_input)
         start_row = max(r.row_number for r in self.app_state.records) + 1 if self.app_state.records else START_ROW
 
+        resolved_cav = ""
+        if hasattr(self.controller, "resolve_cav_for_item"):
+            try:
+                from core.part_master import format_cav_list
+                valid_cavs, _csv_data, _src = self.controller.resolve_cav_for_item(
+                    item_code,
+                    preferred_rev=rev,
+                )
+                if valid_cavs:
+                    resolved_cav = format_cav_list(valid_cavs)
+            except Exception:  # noqa: BLE001
+                resolved_cav = ""
+
         new_records: list[SlipRecord] = []
         for idx, b in enumerate(boxes):
             rec = create_record(
@@ -485,6 +499,7 @@ class QRScanPanel(ctk.CTkFrame):
                 box=b,
                 rev=rev,
                 lot=lot,
+                cav_no=resolved_cav,
             )
             new_records.append(rec)
         return new_records
@@ -495,7 +510,7 @@ class QRScanPanel(ctk.CTkFrame):
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
                 "Thông tin tem chưa hợp lệ",
-                f"Không thể thêm tem vào danh sách in:\n{exc}\n\n"
+                f"Không thể thêm tem vào danh sách in:\n{format_error_for_user(exc, 'thêm tem vào danh sách in')}\n\n"
                 "👉 Hướng dẫn: Vui lòng kiểm tra và điền đầy đủ các thông tin bắt buộc (*) như Mã hàng, Tên hàng, Số lượng, Số box, Rev trước khi thêm.",
             )
             return
@@ -536,8 +551,8 @@ class QRScanPanel(ctk.CTkFrame):
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
                 "Thông tin tem chưa hợp lệ",
-                f"Không thể điền thông tin tem vào form chính:\n{exc}\n\n"
-                "👉 Hướng dẫn: Vui lòng kiểm tra và hoàn thiện các trường dữ liệu trên cửa sổ quét QR trước khi điền vào form chính.",
+                f"Không thể điền thông tin tem vào biểu mẫu chính:\n{format_error_for_user(exc, 'điền thông tin tem vào biểu mẫu')}\n\n"
+                "👉 Hướng dẫn: Vui lòng kiểm tra và hoàn thiện các trường dữ liệu trên cửa sổ quét QR trước khi điền vào biểu mẫu chính.",
             )
             return
 
@@ -554,7 +569,7 @@ class QRScanPanel(ctk.CTkFrame):
         self.app_state.lot_var.set("" if first.lot == (" " * 10) else first.lot)
         self.app_state.status_var.set(f"Đã nạp dữ liệu từ nghiệp vụ QR: {first.item_code} (PO chi tiết: {first.po_detail})")
         if self.controller.view:
-            self.controller.view.append_log("Đã điền thông tin QR vào form chính.")
+            self.controller.view.append_log("Đã điền thông tin QR vào biểu mẫu chính.")
 
         if self.embedded:
             # Seamless flow: jump straight to the data tab so the operator can continue working

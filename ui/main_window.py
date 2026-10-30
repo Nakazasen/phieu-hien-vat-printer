@@ -6,6 +6,7 @@ import os
 import queue
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from tkinter import messagebox, ttk
 from typing import Any
@@ -18,6 +19,7 @@ from core.po_registry import PORegistry
 from core.runtime_paths import prepare_runtime_paths
 from core.slip_printer_engine import (
     SlipRecord,
+    calculate_a4_page_count,
     ensure_layout_config_file,
     generate_preview_image,
     load_layout_config,
@@ -84,7 +86,10 @@ class SlipPrinterApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.controller.on_close)
         self._drain_job = self.after(150, self._drain_event_queue)
         self._update_job = self.after(1200, lambda: self.controller.check_for_update(automatic=True))
-        self._tutorial_prompt_job = self.after(600, self._check_first_launch_tutorial)
+        # Chỉ mở Cẩm nang Hướng dẫn Trực quan khi người dùng bấm nút '💡 Hướng dẫn' hoặc nhấn phím F1
+        self._tutorial_prompt_job = None
+        self._user_guide_window = None
+        self.bind("<F1>", lambda _e: self.open_user_guide())
 
     def destroy(self) -> None:
         if getattr(self, "_is_destroyed", False):
@@ -97,6 +102,12 @@ class SlipPrinterApp(ctk.CTk):
                 self.after_cancel(self._update_job)
             if hasattr(self, "_tutorial_prompt_job") and self._tutorial_prompt_job:
                 self.after_cancel(self._tutorial_prompt_job)
+            if hasattr(self, "_user_guide_window") and self._user_guide_window is not None:
+                try:
+                    self._user_guide_window.destroy()
+                except Exception:
+                    pass
+                self._user_guide_window = None
             if hasattr(self, "_tutorial_overlay") and self._tutorial_overlay is not None:
                 try:
                     self._tutorial_overlay.destroy()
@@ -209,7 +220,7 @@ class SlipPrinterApp(ctk.CTk):
             fg_color=("#F59E0B", "#D97706"),
             hover_color=("#D97706", "#B45309"),
             text_color=("#FFFFFF", "#FFFFFF"),
-            command=self.start_tutorial,
+            command=self.open_user_guide,
         )
         self.tutorial_btn.grid(row=1, column=0, columnspan=2, sticky="e", padx=(0, 8), pady=(4, 0))
 
@@ -292,6 +303,15 @@ class SlipPrinterApp(ctk.CTk):
     def refresh_preview_image(self) -> None:
         # Async pipeline: heavy PDF render runs off the UI thread (see AsyncPreviewRenderer).
         # Cached results apply instantly; fresh renders are debounced and applied when done.
+        if hasattr(self.app_state, "split_cav_var") and self.app_state.split_cav_var.get() and not self.app_state.selected_cavs:
+            self.app_state.preview_source_image = None
+            self.data_tab.reset_preview_display()
+            self.data_tab.preview_image_label.configure(
+                text="⚠️ Đang bật 'Tách CAV' nhưng chưa chọn CAV nào.\nVui lòng chọn ít nhất một CAV hợp lệ để xem trước tem."
+            )
+            self.data_tab.set_qr_payload_text("")
+            return
+
         if not self.app_state.records:
             self.app_state.preview_source_image = None
             self.data_tab.reset_preview_display()
@@ -308,14 +328,19 @@ class SlipPrinterApp(ctk.CTk):
 
         record_index = min(self.app_state.selected_record_index, len(self.app_state.records) - 1)
         record = self.app_state.records[record_index]
+        active_cav = self.app_state.cav_var.get().strip() if hasattr(self.app_state, "cav_var") else record.cav_no
+        if record.item_code.strip() == self.app_state.item_code_var.get().strip() and active_cav != record.cav_no:
+            preview_record = replace(record, cav_no=active_cav)
+        else:
+            preview_record = record
 
-        def _on_ready(image, _rec=record, _idx=record_index) -> None:
+        def _on_ready(image, _rec=record, _prev_rec=preview_record, _idx=record_index) -> None:
             # Stale guard: drop results for a selection that has since changed
             records = self.app_state.records
             if _idx >= len(records) or records[_idx] is not _rec:
                 return
             self.app_state.preview_source_image = image
-            self.data_tab.set_qr_payload_text(_rec.qr_payload)
+            self.data_tab.set_qr_payload_text(_prev_rec.qr_payload)
             self.update_preview_display()
 
         renderer = getattr(self, "_preview_renderer", None)
@@ -328,7 +353,7 @@ class SlipPrinterApp(ctk.CTk):
             )
             self._preview_renderer = renderer
 
-        renderer.request(record, template_path, self.app_state.layout_config, on_ready=_on_ready)
+        renderer.request(preview_record, template_path, self.app_state.layout_config, on_ready=_on_ready)
 
     def _on_preview_error(self, message: str) -> None:
         self.app_state.preview_source_image = None
@@ -355,7 +380,11 @@ class SlipPrinterApp(ctk.CTk):
                 if getattr(self, "_history_dirty", True):
                     self.refresh_history()
             elif "Quét QR" in selected_tab:
-                self.qr_tab.focus_scan_entry()
+                overlay = getattr(self, "_tutorial_overlay", None)
+                if not (overlay is not None and getattr(overlay, "is_active", False)):
+                    self.qr_tab.focus_scan_entry()
+                else:
+                    overlay._raise_and_focus_overlay()
             elif "Master" in selected_tab:
                 if hasattr(self, "part_master_tab"):
                     self.part_master_tab.refresh_table()
@@ -366,6 +395,67 @@ class SlipPrinterApp(ctk.CTk):
         self.sidebar.set_generate_button_state("disabled")
         self.progress.set(0)
         self.app_state.status_var.set("Đang tạo PDF...")
+
+    def confirm_export_new_only(
+        self,
+        *,
+        previously_exported: int,
+        repeated_in_list: int,
+        new_count: int,
+    ) -> bool:
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("Một số tem đã được xuất")
+        dialog.transient(self)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+
+        width, height = 520, 270
+        x = self.winfo_rootx() + (self.winfo_width() - width) // 2
+        y = self.winfo_rooty() + (self.winfo_height() - height) // 2
+        dialog.geometry(f"{width}x{height}+{max(0, x)}+{max(0, y)}")
+        dialog.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            dialog,
+            text="Có dòng trùng với tem đã xuất",
+            font=ctk.CTkFont(size=18, weight="bold"),
+        ).grid(row=0, column=0, sticky="w", padx=22, pady=(20, 8))
+        ctk.CTkLabel(
+            dialog,
+            text=(
+                f"Phát hiện {previously_exported} tem đã xuất trước đó (tô đỏ) và "
+                f"{repeated_in_list} dòng bị lặp trong danh sách hiện tại.\n\n"
+                f"👉 Bấm nút màu xanh 'Chỉ xuất {new_count} tem mới' để phần mềm tự động "
+                f"bỏ qua các dòng cũ và chỉ tạo file PDF cho đúng {new_count} tem mới."
+            ),
+            justify="left",
+            anchor="w",
+            wraplength=470,
+        ).grid(row=1, column=0, sticky="ew", padx=22, pady=(0, 16))
+
+        result = {"export": False}
+        buttons = ctk.CTkFrame(dialog, fg_color="transparent")
+        buttons.grid(row=2, column=0, sticky="e", padx=22, pady=(0, 18))
+        ctk.CTkButton(
+            buttons,
+            text="Hủy",
+            width=90,
+            fg_color="gray65",
+            hover_color="gray55",
+            command=dialog.destroy,
+        ).pack(side="right", padx=(8, 0))
+        ctk.CTkButton(
+            buttons,
+            text=f"Chỉ xuất {new_count} tem mới",
+            width=190,
+            command=lambda: (result.update(export=True), dialog.destroy()),
+        ).pack(side="right")
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        self.wait_window(dialog)
+        return result["export"]
+
+    def show_duplicate_export_info(self, message: str) -> None:
+        messagebox.showinfo("Không có tem mới", message, parent=self)
 
     def auto_commit_form(self) -> bool:
         return self.data_tab.auto_commit_form()
@@ -384,21 +474,37 @@ class SlipPrinterApp(ctk.CTk):
                 self.app_state.status_var.set(message)
                 self.append_log(message)
             elif event_type == "success":
-                output_path, record_count = payload
-                a4_page_count = (record_count + 3) // 4
+                if isinstance(payload, tuple) and len(payload) >= 3:
+                    output_path, record_count, exported_records = payload[0], payload[1], payload[2]
+                else:
+                    output_path, record_count = payload
+                    exported_records = None
+                paper_size = self.app_state.paper_size_var.get() if hasattr(self.app_state, "paper_size_var") else "A4"
+                page_count = calculate_a4_page_count(record_count, paper_size=paper_size)
                 self.app_state.generated_output_path = Path(output_path)
                 self.progress.set(1)
-                self.app_state.status_var.set(f"Hoàn tất. Đã tạo {record_count} tem trên {a4_page_count} trang A4.")
+                self.app_state.status_var.set(f"Hoàn tất. Đã tạo {record_count} tem trên {page_count} trang {paper_size}.")
                 self.app_state.output_name_var.set(self.app_state._default_output_name())
-                self.append_log(f"Hoàn tất: {output_path}")
+                self.append_log(f"Hoàn tất: {output_path} ({page_count} trang {paper_size})")
                 self._history_dirty = True
+                try:
+                    self.controller.on_pdf_export_completed(
+                        exported_records=exported_records,
+                        output_path=Path(output_path),
+                        record_count=int(record_count),
+                        page_count=int(page_count),
+                        paper_size=str(paper_size),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
                 messagebox.showinfo(
                     APP_TITLE,
                     f"🎉 TẠO FILE PDF THÀNH CÔNG!\n\n"
                     f"- Số lượng tem: {record_count} tem\n"
-                    f"- Quy cách in: {a4_page_count} trang A4\n"
+                    f"- Quy cách in: {page_count} trang {paper_size}\n"
                     f"- Vị trí lưu: {output_path}\n\n"
-                    "👉 Bạn có thể nhấn nút 'Mở PDF vừa tạo' ở thanh bên trái để xem hoặc in trực tiếp.",
+                    "👉 Các dòng tem vừa xuất đã được tự động dọn khỏi bảng chờ in.\n"
+                    "Bạn có thể nhấn nút 'Mở PDF vừa tạo' ở thanh bên trái để xem hoặc in trực tiếp.",
                 )
                 self.sidebar.set_generate_button_state("normal")
             elif event_type == "error":
@@ -412,6 +518,18 @@ class SlipPrinterApp(ctk.CTk):
                     "1. Đóng file PDF đích nếu đang mở trong Adobe Acrobat / trình duyệt.\n"
                     "2. Kiểm tra quyền ghi dữ liệu vào thư mục đầu ra.\n"
                     "3. Đảm bảo file PDF mẫu hợp lệ và không bị hỏng.",
+                )
+                self.sidebar.set_generate_button_state("normal")
+            elif event_type == "duplicate_race":
+                self.progress.set(0)
+                self.app_state.status_var.set("Có tem vừa được xuất trên máy khác")
+                self.append_log(f"Tem vừa được đăng ký từ máy khác: {payload}")
+                messagebox.showinfo(
+                    "Tem vừa được xuất trên máy khác",
+                    "Một máy khác đã xuất một trong các tem này sau khi bạn kiểm tra.\n\n"
+                    "Chưa tạo PDF. Bấm Tạo PDF lần nữa để kiểm tra lại; ứng dụng sẽ bỏ qua tem đã xuất.\n\n"
+                    f"Chi tiết: {payload}",
+                    parent=self,
                 )
                 self.sidebar.set_generate_button_state("normal")
             elif event_type == "update_available":
@@ -497,6 +615,12 @@ class SlipPrinterApp(ctk.CTk):
                 sv_ttk.use_dark_theme()
         except Exception:  # noqa: BLE001
             pass
+        data_tab = self.__dict__.get("data_tab")
+        if data_tab is not None and hasattr(data_tab, "apply_theme_tags"):
+            try:
+                data_tab.apply_theme_tags()
+            except Exception:  # noqa: BLE001
+                pass
         if persist:
             self._save_theme_setting(mode)
 
@@ -555,6 +679,17 @@ class SlipPrinterApp(ctk.CTk):
         """Save appearance theme mode to user_settings.json."""
         self._save_user_settings({"appearance_mode": mode})
 
+    def _load_paper_size_setting(self) -> str:
+        """Load paper size preference ('A4' or 'Letter') from user_settings.json."""
+        settings = self._load_user_settings()
+        size = str(settings.get("paper_size", "A4")).strip()
+        return "Letter" if size.lower() == "letter" else "A4"
+
+    def _save_paper_size_setting(self, size: str) -> None:
+        """Save paper size preference ('A4' or 'Letter') to user_settings.json."""
+        normalized = "Letter" if str(size).strip().lower() == "letter" else "A4"
+        self._save_user_settings({"paper_size": normalized})
+
     def _load_tutorial_seen_setting(self) -> bool:
         """Load tutorial completion flag from user_settings.json."""
         settings = self._load_user_settings()
@@ -591,7 +726,26 @@ class SlipPrinterApp(ctk.CTk):
         """Alias for _check_first_launch_tutorial."""
         self._check_first_launch_tutorial()
 
-    # --- TUTORIAL ENGINE INTEGRATION ---
+    # --- USER GUIDE & TUTORIAL ENGINE INTEGRATION ---
+
+    def open_user_guide(self, initial_chapter: int = 0):
+        """Open the 6-chapter Real-User Visual Guide window (replaces spotlight overlay)."""
+        existing = getattr(self, "_user_guide_window", None)
+        if existing is not None and getattr(existing, "is_active", False) and existing.winfo_exists():
+            existing.select_chapter(initial_chapter)
+            existing.lift()
+            existing.focus_force()
+            self._tutorial_overlay = existing
+            return existing
+
+        from ui.components.user_guide_dialog import VisualUserGuideWindow
+
+        guide_win = VisualUserGuideWindow(self, initial_chapter=initial_chapter)
+        self._user_guide_window = guide_win
+        self._tutorial_overlay = guide_win
+        self._save_tutorial_seen_setting(True)
+        self.append_log("Đã mở Cẩm nang Hướng dẫn Sử dụng Trực quan.")
+        return guide_win
 
     def get_tutorial_steps(self=None):
         """Constructs and returns the 4-step tutorial script."""
@@ -632,7 +786,12 @@ def run_health_check() -> None:
     load_layout_config(paths.layout_path)
     registry = PORegistry(paths.registry_path)
     registry.close()
-    print(f"Kiểm tra hệ thống thành công: {paths.template_path}")
+    try:
+        if sys.stdout:
+            sys.stdout.write(f"Kiem tra he thong thanh cong: {paths.template_path}\n")
+            sys.stdout.flush()
+    except Exception:
+        pass
 
 
 def _is_pid_alive(pid: int) -> bool:

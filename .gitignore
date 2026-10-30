@@ -28,21 +28,28 @@ graphify-out/
 scratch/
 tmp/
 temp_excel/
+.agents/
 
 # Project-specific / User data
 po_registry.db
 po_registry.db-shm
 po_registry.db-wal
+part_master.db
+part_master.db-shm
+part_master.db-wal
 output/
-test_output_*.pdf
-test_batch_output.pdf
+test_*.pdf
 260*.pdf
 edi-*.pdf
 *.xlsx
 qr-contract-*.png
+actual_barcode.png
+barcode_*.png
+bc_only.png
+page.png
+slips_*.png
 
 # OS generated files
 .DS_Store
 Thumbs.db
-
 *.bak

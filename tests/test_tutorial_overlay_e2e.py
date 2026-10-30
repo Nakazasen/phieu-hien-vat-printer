@@ -1916,7 +1916,7 @@ class TestTier4RealWorldScenarios:
                 create_mock_tutorial_step("step1_excel", "1. Nạp dữ liệu Excel", "Chọn file và import", sidebar),
                 create_mock_tutorial_step("step2_qr", "2. Quét mã QR", "3 chế độ phân tách / hoàn kho", sidebar),
                 create_mock_tutorial_step("step3_po", "3. Tạo PO tự động", "Quy tắc 11YYMMDDNN", data_tab, target_tab_index=0),
-                create_mock_tutorial_step("step4_pdf", "4. Xuất file PDF", "Tạo 4 tem trên 1 trang A4", sidebar.generate_button),
+                create_mock_tutorial_step("step4_pdf", "4. Xuất file PDF", "Tạo 6 tem trên 1 trang A4", sidebar.generate_button),
             ]
 
             completed = False

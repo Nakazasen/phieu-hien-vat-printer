@@ -346,7 +346,7 @@ def test_action_buttons_at_1000x700_minimum(tk_root):
             "💾 Cập nhật dòng",
             "🗑️ Xóa dòng",
             "📋 Điền mẫu",
-            "🧹 Xóa form",
+            "🧹 Xóa biểu mẫu",
         ]
 
         found_names = list(buttons.keys())

@@ -200,7 +200,7 @@ def build_tutorial_steps(app: Optional[Any] = None) -> list[TutorialStep]:
         step_id="step_excel_import",
         title="1. Nạp dữ liệu từ Excel",
         description=(
-            "Chọn file bảng kê Excel (.xlsx) và bấm 'Import từ Excel'.\n\n"
+            "Chọn tệp bảng kê Excel (.xlsx) và bấm 'Nhập từ Excel'.\n\n"
             "• Cột bắt buộc: Mã hàng, Tên hàng, SL thùng, Số box, Rev (01–99).\n"
             "• Cột Ngày/Lot: Nếu để trống sẽ tự động điền 10 dấu cách trong mã QR.\n"
             "• Dữ liệu trùng lặp (trùng mã hàng, PO, box) sẽ được tự động phát hiện và tô nền đỏ cảnh báo."
@@ -227,15 +227,15 @@ def build_tutorial_steps(app: Optional[Any] = None) -> list[TutorialStep]:
         padding=8,
     )
 
-    # Step 3: Tạo mã Auto PO & Thêm phiếu
+    # Step 3: Tạo mã PO tự động & Thêm phiếu
     step_3 = TutorialStep(
         step_id="step_auto_po",
-        title="3. Tạo mã Auto PO & Thêm phiếu",
+        title="3. Tạo mã PO tự động & Thêm phiếu",
         description=(
-            "Quản lý và nhập tem thủ công tại Tab Dữ liệu:\n\n"
-            "• Mã Auto PO: Tự động cấp phát mã PO chuẩn định dạng '11YYMMDDNN' (11 + Năm/Tháng/Ngày + STT 01–99 trong ngày).\n"
-            "• Không lo trùng lặp: Cơ sở dữ liệu PO Registry đảm bảo mỗi tem có số PO duy nhất.\n"
-            "• Thao tác nhanh: Bấm '➕ Thêm mới' để thêm tem vào bảng in hoặc '📋 Điền mẫu' để thử nghiệm."
+            "Quản lý và nhập tem thủ công tại thẻ Dữ liệu:\n\n"
+            "• Mã PO tự động có định dạng '11YYMMDDNN' (11 + Năm/Tháng/Ngày + STT 01–99 trong ngày).\n"
+            "• Tránh trùng lặp: Cơ sở dữ liệu dùng chung bảo đảm mỗi tem có số PO duy nhất.\n"
+            "• Bấm '➕ Thêm mới' để đưa tem vào danh sách in."
         ),
         target_widget_getter=_get_form_target,
         target_tab_index=0,
@@ -250,8 +250,8 @@ def build_tutorial_steps(app: Optional[Any] = None) -> list[TutorialStep]:
         description=(
             "Xuất và in ấn phiếu hiện vật chất lượng cao:\n\n"
             "• Xem trước trực quan: Kiểm tra hình ảnh tem và chuỗi QR 129 ký tự tại khung xem trước bên phải.\n"
-            "• Tiết kiệm giấy in: Hệ thống tự động ghép chuẩn xác 4 phiếu / trang A4 theo đúng layout cấu hình.\n"
-            "• Xuất & In: Bấm 'Tạo PDF' để xuất file, sau đó bấm 'Mở PDF vừa tạo' để in trực tiếp."
+            "• Tiết kiệm giấy in: A4 in 6 tem mỗi trang; Letter in 4 tem mỗi trang.\n"
+            "• Xuất & In: Bấm 'Tạo PDF' để xuất tệp, sau đó bấm 'Mở PDF vừa tạo' để in trực tiếp."
         ),
         target_widget_getter=_get_pdf_target,
         target_tab_index=0,

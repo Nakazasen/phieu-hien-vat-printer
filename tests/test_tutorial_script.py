@@ -57,7 +57,7 @@ class TestTutorialScriptStructure:
         assert "1. Nạp dữ liệu từ Excel" in step.title
         desc = step.description.lower()
         assert "excel" in desc
-        assert "import từ excel" in desc or "import" in desc
+        assert "nhập từ excel" in desc
         assert "mã hàng" in desc
         assert "trùng lặp" in desc or "cảnh báo" in desc
 
@@ -76,7 +76,7 @@ class TestTutorialScriptStructure:
     def test_step3_auto_po_vietnamese_content(self):
         step = build_tutorial_steps(None)[2]
         assert step.step_id == "step_auto_po"
-        assert "3. Tạo mã Auto PO & Thêm phiếu" in step.title
+        assert "3. Tạo mã PO tự động & Thêm phiếu" in step.title
         desc = step.description
         assert "Auto PO" in desc or "11YYMMDDNN" in desc
         assert "PO Registry" in desc or "trùng lặp" in desc or "Thêm mới" in desc

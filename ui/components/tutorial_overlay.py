@@ -106,8 +106,8 @@ class TooltipCard(ctk.CTkFrame):
         self.hint_label = ctk.CTkLabel(
             self,
             text="⌨ [Enter] Tiếp tục · [←] Quay lại · [Esc] Bỏ qua",
-            font=ctk.CTkFont(size=10),
-            text_color=("gray50", "gray50"),
+            font=ctk.CTkFont(size=11),
+            text_color=("#475569", "#94A3B8"),
         )
         self.hint_label.grid(row=3, column=0, sticky="w", padx=16, pady=(0, 10))
 
@@ -451,6 +451,7 @@ class InteractiveTutorialOverlay:
 
         self._configure_timer_id: Optional[str] = None
         self._bound_events: list[tuple[str, str]] = []
+        self._aux_bound_widgets: list[tuple[tk.Misc, str, str]] = []
 
         self.overlay_win: Optional[tk.Toplevel] = None
         self.tooltip_win: Optional[tk.Toplevel] = None
@@ -523,13 +524,17 @@ class InteractiveTutorialOverlay:
         )
         self.canvas.pack(fill="both", expand=True)
 
-        # Intercept background mouse events on the overlay
+        # Intercept background mouse events on the overlay and keep tooltip raised/focused
+        def _on_scrim_mouse( _event: tk.Event) -> str:
+            self._raise_and_focus_overlay()
+            return "break"
+
         for event_name in (
             "<Button-1>", "<Button-2>", "<Button-3>",
             "<Double-Button-1>", "<Triple-Button-1>",
             "<B1-Motion>", "<B2-Motion>", "<B3-Motion>", "<MouseWheel>"
         ):
-            self.canvas.bind(event_name, lambda e: "break")
+            self.canvas.bind(event_name, _on_scrim_mouse)
 
         # 2. Opaque Tooltip Window: a plain (non-layered) toplevel — no
         # transparentcolor, no alpha — so repaints are native and cheap.
@@ -553,11 +558,10 @@ class InteractiveTutorialOverlay:
         )
         self.tooltip.pack(fill="both", expand=True)
 
-        # Disable the main window to trap focus and prevent clicking through the transparent hole
-        try:
-            self.master.attributes("-disabled", True)
-        except Exception:
-            pass
+        # IMPORTANT: Do NOT set self.master.attributes("-disabled", True) here.
+        # Disabling the Win32 root HWND (WS_DISABLED) blocks all keyboard shortcuts
+        # (<Escape>, <Return>, <Left>, <Right>) and causes Z-order lockups on Alt-Tab
+        # or when clicking through the transparent spotlight cutout.
 
     @staticmethod
     def _current_card_color() -> str:
@@ -575,17 +579,42 @@ class InteractiveTutorialOverlay:
             y = self.master.winfo_rooty()
             self.overlay_win.geometry(f"{w}x{h}+{x}+{y}")
 
-    def _place_tooltip_window(self, pos_x: int, pos_y: int) -> None:
+    def _place_tooltip_window(
+        self,
+        pos_x: int,
+        pos_y: int,
+        card_h: Optional[int] = None,
+    ) -> None:
         """Position the fully-opaque tooltip window relative to the master client area."""
         if self.tooltip_win is None or not self.tooltip_win.winfo_exists():
             return
         x = self.master.winfo_rootx() + int(pos_x)
         y = self.master.winfo_rooty() + int(pos_y)
+        effective_h = max(
+            PlacementEngine.CARD_HEIGHT,
+            int(card_h) if card_h is not None else PlacementEngine.CARD_HEIGHT,
+        )
         self.tooltip_win.geometry(
-            f"{PlacementEngine.CARD_WIDTH}x{PlacementEngine.CARD_HEIGHT}+{x}+{y}"
+            f"{PlacementEngine.CARD_WIDTH}x{effective_h}+{x}+{y}"
         )
         if self.tooltip_win.state() != "normal":
             self.tooltip_win.deiconify()
+
+    def _raise_and_focus_overlay(self) -> None:
+        """Ensure overlay_win and tooltip_win remain above master and master holds keyboard focus."""
+        if not self._is_active or self._is_destroyed:
+            return
+        try:
+            if self.overlay_win is not None and self.overlay_win.winfo_exists():
+                tk.Misc.lift(self.overlay_win)
+            if self.canvas is not None and self.canvas.winfo_exists():
+                tk.Misc.lift(self.canvas)
+            if self.tooltip_win is not None and self.tooltip_win.winfo_exists():
+                tk.Misc.lift(self.tooltip_win)
+            if self.master.winfo_exists():
+                self.master.focus_set()
+        except Exception:
+            pass
 
     def _bind_events(self) -> None:
         """Register keyboard navigation shortcuts and window resize listener."""
@@ -618,6 +647,13 @@ class InteractiveTutorialOverlay:
                 self._bound_events.append((seq, func_id))
             except Exception:
                 pass
+            for aux_win in (self.overlay_win, self.tooltip_win, self.tooltip):
+                if aux_win is not None:
+                    try:
+                        aux_id = aux_win.bind(seq, handler, add="+")
+                        self._aux_bound_widgets.append((aux_win, seq, aux_id))
+                    except Exception:
+                        pass
 
         try:
             cfg_func_id = self.master.bind("<Configure>", self._on_configure, add="+")
@@ -625,14 +661,67 @@ class InteractiveTutorialOverlay:
         except Exception:
             pass
 
+        def _on_master_focus_or_click(event: tk.Event) -> None:
+            if not self._is_active or self._is_destroyed:
+                return
+            try:
+                self.master.after_idle(self._raise_and_focus_overlay)
+            except Exception:
+                pass
+
+        def _on_master_unmap(event: tk.Event) -> None:
+            if not self._is_active or self._is_destroyed or event.widget != self.master:
+                return
+            try:
+                if self.master.state() == "iconic":
+                    if self.overlay_win is not None and self.overlay_win.winfo_exists():
+                        self.overlay_win.withdraw()
+                    if self.tooltip_win is not None and self.tooltip_win.winfo_exists():
+                        self.tooltip_win.withdraw()
+            except Exception:
+                pass
+
+        def _on_master_map(event: tk.Event) -> None:
+            if not self._is_active or self._is_destroyed or event.widget != self.master:
+                return
+            try:
+                if self.overlay_win is not None and self.overlay_win.winfo_exists():
+                    self.overlay_win.deiconify()
+                if self.tooltip_win is not None and self.tooltip_win.winfo_exists():
+                    self.tooltip_win.deiconify()
+                self._sync_overlay_geometry()
+                self._raise_and_focus_overlay()
+            except Exception:
+                pass
+
+        for seq, cb in (
+            ("<FocusIn>", _on_master_focus_or_click),
+            ("<ButtonRelease-1>", _on_master_focus_or_click),
+            ("<Unmap>", _on_master_unmap),
+            ("<Map>", _on_master_map),
+        ):
+            try:
+                fid = self.master.bind(seq, cb, add="+")
+                self._aux_bound_widgets.append((self.master, seq, fid))
+            except Exception:
+                pass
+
     def _unbind_events(self) -> None:
-        """Safely unbind all registered event listeners from master window."""
+        """Safely unbind all registered event listeners from master and popup windows."""
         for seq, func_id in self._bound_events:
             try:
                 self.master.unbind(seq, func_id)
             except Exception:
                 pass
         self._bound_events.clear()
+
+        for widget, seq, func_id in self._aux_bound_widgets:
+            try:
+                if hasattr(widget, "winfo_exists") and widget.winfo_exists():
+                    widget.unbind(seq, func_id)
+            except Exception:
+                pass
+        self._aux_bound_widgets.clear()
 
     def _on_configure(self, event: tk.Event) -> None:
         """Debounced handler for root window resize and movement events."""
@@ -713,6 +802,11 @@ class InteractiveTutorialOverlay:
             current_index=self._current_step_index,
             total_steps=len(self.steps),
         )
+        try:
+            self.tooltip.update_idletasks()
+            dynamic_card_h = max(PlacementEngine.CARD_HEIGHT, int(self.tooltip.winfo_reqheight()))
+        except Exception:
+            dynamic_card_h = PlacementEngine.CARD_HEIGHT
 
         root_w = max(100, self.master.winfo_width())
         root_h = max(100, self.master.winfo_height())
@@ -721,19 +815,12 @@ class InteractiveTutorialOverlay:
             root_h=root_h,
             spotlight_bounds=bounds,
             card_w=PlacementEngine.CARD_WIDTH,
-            card_h=PlacementEngine.CARD_HEIGHT,
+            card_h=dynamic_card_h,
             preferred_position=step.tooltip_position,
         )
 
-        self._place_tooltip_window(pos_x, pos_y)
-
-        # Ensure overlay and tooltip stay above the master window (no -topmost:
-        # raising once per render is cheap and does not fight the system z-order)
-        if self.overlay_win is not None and self.overlay_win.winfo_exists():
-            tk.Misc.lift(self.overlay_win)
-        tk.Misc.lift(self.canvas)
-        if self.tooltip_win is not None and self.tooltip_win.winfo_exists():
-            tk.Misc.lift(self.tooltip_win)
+        self._place_tooltip_window(pos_x, pos_y, card_h=dynamic_card_h)
+        self._raise_and_focus_overlay()
 
     def _draw_scrim_and_spotlight(self, bounds: Optional[tuple[int, int, int, int]]) -> None:
         """Draws the 4-Rectangle dark scrim cutout and multi-stroke Emerald glow border."""

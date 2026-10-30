@@ -313,3 +313,52 @@ class TestInteractiveTutorialOverlay:
 
         overlay.destroy()
         assert not overlay.is_active
+
+    def test_overlay_does_not_disable_master_window_and_supports_tooltip_keys(self, tk_root):
+        """Regression test for user-reported freeze: master window must NOT have -disabled=True
+        and keyboard events on tooltip_win/overlay_win must navigate and dismiss cleanly.
+        """
+        overlay = InteractiveTutorialOverlay(master_window=tk_root)
+        long_desc = "\n".join([f"Dòng hướng dẫn chi tiết số {i} kèm tiếng Nhật (分割 / 戻入)" for i in range(8)])
+        steps = [
+            TutorialStep("step_1", "Bước 1", "Mô tả ngắn", lambda: None),
+            TutorialStep("step_2", "Bước 2", long_desc, lambda: None),
+        ]
+        overlay.register_steps(steps)
+        overlay.start(0)
+        tk_root.update_idletasks()
+
+        try:
+            disabled_attr = bool(tk_root.attributes("-disabled"))
+        except Exception:
+            disabled_attr = False
+        assert disabled_attr is False, "Master window must not be Win32 WS_DISABLED during tutorial"
+
+        assert overlay.tooltip_win is not None
+        assert overlay.overlay_win is not None
+
+        # Ensure master holds keyboard focus and responds to <Right>, <Left>, <Escape>
+        tk_root.focus_force()
+        tk_root.update()
+        tk_root.event_generate("<Right>")
+        tk_root.update_idletasks()
+        assert overlay.current_step_index == 1
+
+        # Verify dynamic height expanded >= CARD_HEIGHT for 8-line description
+        geom = overlay.tooltip_win.geometry()
+        size_part = geom.split("+")[0]
+        _w_str, h_str = size_part.split("x")
+        assert int(h_str) >= PlacementEngine.CARD_HEIGHT
+
+        # Dispatch <Left> -> goes back to step 1
+        tk_root.event_generate("<Left>")
+        tk_root.update_idletasks()
+        assert overlay.current_step_index == 0
+
+        # Dispatch <Escape> -> skips and closes tutorial
+        tk_root.event_generate("<Escape>")
+        tk_root.update_idletasks()
+        assert not overlay.is_active
+        assert len(overlay._bound_events) == 0
+        assert len(overlay._aux_bound_widgets) == 0
+

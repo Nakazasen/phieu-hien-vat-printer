@@ -19,6 +19,20 @@
       "height": 100
     }
   },
+  "barcode_positions": {
+    "barcode_item_code": {
+      "label": "Mã vạch 1D linh kiện (Code 39)",
+      "field": "item_code",
+      "x": 711,
+      "y": 162,
+      "width": 0.65,
+      "height": 28.0,
+      "barWidth": 0.65,
+      "barHeight": 28.0,
+      "checksum": 0,
+      "humanReadable": false
+    }
+  },
   "text_positions": [
     {
       "id": "po_top",
@@ -159,6 +173,13 @@
       "field": "lot",
       "x": 610,
       "y": 150
+    },
+    {
+      "id": "cav_right_1",
+      "label": "CAV No. phải 1",
+      "field": "cav_no",
+      "x": 684,
+      "y": 258
     },
     {
       "id": "po_bottom",

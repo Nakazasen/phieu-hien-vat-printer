@@ -43,7 +43,6 @@ DEFAULT_LAN_SETUP_DIR = r"\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Product
 DEFAULT_LAN_UPDATE_DIR = r"\\fstvn01\Data\00_KDTVN Common(KDTVN共通)\⑤Production Engineering(製造技術)\Hang muc can luu\Vinh\PMintemEDI\release_update"
 
 
-
 def _release() -> dict[str, Any]:
     value = json.loads((PROJECT_ROOT / "release.json").read_text(encoding="utf-8-sig"))
     version = str(value.get("version", ""))
@@ -88,7 +87,7 @@ def _remove_disallowed_bundle_files(root: Path) -> None:
 def _validate_app_dist(root: Path) -> None:
     # PyInstaller --onedir keeps application resources under _internal while
     # the executable stays at the bundle root.  Keep this validation aligned
-    # with runtime_paths.bundle_root(), which resolves to sys._MEIPASS.
+    # with runtime_paths.bundle_dir(), which resolves to sys._MEIPASS.
     resource_root = root / "_internal"
     required = [
         root / APP_ENTRYPOINT,
@@ -96,6 +95,8 @@ def _validate_app_dist(root: Path) -> None:
         resource_root / "layout_config.json",
         resource_root / "release.json",
         resource_root / "update_sources.default.json",
+        resource_root / "assets" / "user_guide" / "huong_dan_su_dung.html",
+        resource_root / "assets" / "user_guide" / "Huong_Dan_Su_Dung_InPhieuHienVat.pdf",
     ]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
@@ -129,10 +130,28 @@ def _run_pyinstaller(
         str(icon),
         "--collect-data",
         "sv_ttk",
+        "--collect-submodules",
+        "reportlab.graphics.barcode",
+        "--hidden-import",
+        "reportlab.graphics.barcode.code128",
+        "--hidden-import",
+        "reportlab.graphics.barcode.code93",
+        "--hidden-import",
+        "reportlab.graphics.barcode.common",
+        "--hidden-import",
+        "reportlab.graphics.barcode.eanbc",
+        "--hidden-import",
+        "reportlab.graphics.barcode.usps",
+        "--hidden-import",
+        "reportlab.graphics.barcode.widgets",
     ]
     arguments.append("--console" if console else "--windowed")
     for path in add_data:
-        arguments.extend(["--add-data", f"{path}{os.pathsep}."])
+        if path.is_dir():
+            rel_dest = path.relative_to(PROJECT_ROOT).as_posix()
+            arguments.extend(["--add-data", f"{path}{os.pathsep}{rel_dest}"])
+        else:
+            arguments.extend(["--add-data", f"{path}{os.pathsep}."])
     arguments.append(str(script))
     subprocess.run(arguments, check=True, cwd=str(PROJECT_ROOT))
     return PROJECT_ROOT / "dist" / name
@@ -149,6 +168,9 @@ def build_application() -> Path:
     ]
     if (PROJECT_ROOT / "DummySlip.xlsx").is_file():
         assets.append(PROJECT_ROOT / "DummySlip.xlsx")
+    user_guide_dir = PROJECT_ROOT / "assets" / "user_guide"
+    if user_guide_dir.is_dir():
+        assets.append(user_guide_dir)
     root = _run_pyinstaller(
         PROJECT_ROOT / "slip_printer_app.py", APP_NAME, add_data=assets, console=False, icon=icon
     )
@@ -172,6 +194,8 @@ def _smoke_health(executable: Path, *, app_root: Path | None = None) -> None:
         environment = os.environ.copy()
         environment["INPHIEUHIENVAT_DATA_DIR"] = str(temp_root / "data")
         environment["INPHIEUHIENVAT_OUTPUT_DIR"] = str(temp_root / "output")
+        environment["PYTHONIOENCODING"] = "utf-8"
+        environment["PYTHONUTF8"] = "1"
         command = [str(executable)]
         if app_root is not None:
             command.extend(["--app-root", str(app_root)])
@@ -312,31 +336,54 @@ def verify_writable_share(folder: Path) -> None:
         probe_file.unlink(missing_ok=True)
 
 
+def _archive_older_artifacts(publish_dir: Path, *, keep_name: str, glob_pattern: str) -> None:
+    """Move older Setup (.exe) or Update (.phieuupdate) artifacts in publish_dir into publish_dir / 'old'."""
+    old_dir = publish_dir / "old"
+    try:
+        for existing in publish_dir.glob(glob_pattern):
+            if not existing.is_file() or existing.name == keep_name:
+                continue
+            old_dir.mkdir(parents=True, exist_ok=True)
+            target = old_dir / existing.name
+            try:
+                os.replace(existing, target)
+            except OSError:
+                shutil.copy2(existing, target)
+                existing.unlink(missing_ok=True)
+            print(f"Đã chuyển bản cũ vào thư mục lưu trữ old: {target}")
+    except OSError as exc:
+        print(f"Cảnh báo: Không thể dọn dẹp phiên bản cũ trong {publish_dir}: {exc}")
+
+
 def publish_setup(setup_exe: Path, publish_dir: Path, *, force: bool = False) -> Path:
     """Publish Setup installer (.exe) to the LAN software directory using atomic .part copy."""
     if not setup_exe.is_file():
         raise FileNotFoundError(f"Không tìm thấy file Setup để phát hành: {setup_exe}")
     verify_writable_share(publish_dir)
     destination = publish_dir / setup_exe.name
+    need_copy = True
     if destination.is_file():
         if _sha256(destination) == _sha256(setup_exe):
             print(f"Setup {setup_exe.name} đã tồn tại trên LAN với hash trùng khớp; bỏ qua copy.")
-            return destination
-        if not force:
+            need_copy = False
+        elif not force:
             raise RuntimeError(f"Setup {setup_exe.name} đã tồn tại trên LAN nhưng khác hash! Dừng để tránh ghi đè artifact lịch sử.")
-        print(f"Ghi đè Setup {setup_exe.name} trên LAN theo cờ --force.")
-    setup_part = publish_dir / f"{setup_exe.name}.part"
-    try:
-        shutil.copyfile(setup_exe, setup_part)
-        if _sha256(setup_exe) != _sha256(setup_part) or setup_part.stat().st_size != setup_exe.stat().st_size:
-            raise RuntimeError("Hash hoặc kích thước Setup sau khi copy lên LAN không khớp")
-        os.replace(setup_part, destination)
-        if _sha256(destination) != _sha256(setup_exe):
-            raise RuntimeError("Xác minh Setup trên LAN sau khi rename không khớp")
-        return destination
-    except Exception:
-        setup_part.unlink(missing_ok=True)
-        raise
+        else:
+            print(f"Ghi đè Setup {setup_exe.name} trên LAN theo cờ --force.")
+    if need_copy:
+        setup_part = publish_dir / f"{setup_exe.name}.part"
+        try:
+            shutil.copyfile(setup_exe, setup_part)
+            if _sha256(setup_exe) != _sha256(setup_part) or setup_part.stat().st_size != setup_exe.stat().st_size:
+                raise RuntimeError("Hash hoặc kích thước Setup sau khi copy lên LAN không khớp")
+            os.replace(setup_part, destination)
+            if _sha256(destination) != _sha256(setup_exe):
+                raise RuntimeError("Xác minh Setup trên LAN sau khi rename không khớp")
+        except Exception:
+            setup_part.unlink(missing_ok=True)
+            raise
+    _archive_older_artifacts(publish_dir, keep_name=destination.name, glob_pattern=f"{APP_NAME}_Setup_*.exe")
+    return destination
 
 
 def publish_update(package_path: Path, publish_dir: Path, *, notes: str, force: bool = False) -> tuple[Path, Path]:
@@ -381,10 +428,11 @@ def publish_update(package_path: Path, publish_dir: Path, *, notes: str, force: 
         }
         catalog_part.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         os.replace(catalog_part, catalog)
-        return destination, catalog
     except Exception:
         catalog_part.unlink(missing_ok=True)
         raise
+    _archive_older_artifacts(publish_dir, keep_name=destination.name, glob_pattern=f"{APP_NAME}-*.phieuupdate")
+    return destination, catalog
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -454,7 +502,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-
 if __name__ == "__main__":
     raise SystemExit(main())
-

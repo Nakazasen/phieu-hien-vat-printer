@@ -106,7 +106,7 @@ class LayoutTabPanel(ctk.CTkFrame):
         ctk.CTkLabel(
             opt_header,
             text="Thiết kế mới 2026",
-            font=ctk.CTkFont(size=10, weight="bold"),
+            font=ctk.CTkFont(size=11, weight="bold"),
             fg_color=("#10B981", "#047857"),
             text_color="white",
             corner_radius=6,
@@ -144,8 +144,8 @@ class LayoutTabPanel(ctk.CTkFrame):
         ctk.CTkLabel(
             s1_frame,
             text="• BẬT: Chỉ in số lượng 1 thùng (ví dụ: 20) căn giữa ô hàng giao.\n• TẮT: In theo dạng cũ kèm gạch chéo (ví dụ: 20 / 60).",
-            font=ctk.CTkFont(size=10),
-            text_color=("gray40", "gray60"),
+            font=ctk.CTkFont(size=11),
+            text_color=("#475569", "#94A3B8"),
             justify="left",
         ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 6))
 
@@ -179,8 +179,8 @@ class LayoutTabPanel(ctk.CTkFrame):
         ctk.CTkLabel(
             s2_frame,
             text="• BẬT: Để trống ô cạnh mã vạch PACKAGE QTY theo thiết kế mới.\n• TẮT: In số thứ tự thùng (ví dụ: 001/003) vào ô này.",
-            font=ctk.CTkFont(size=10),
-            text_color=("gray40", "gray60"),
+            font=ctk.CTkFont(size=11),
+            text_color=("#475569", "#94A3B8"),
             justify="left",
         ).grid(row=1, column=0, sticky="w", padx=12, pady=(0, 6))
 
@@ -190,7 +190,7 @@ class LayoutTabPanel(ctk.CTkFrame):
         ctk.CTkLabel(
             note_frame,
             text="✍️ Các ô Line QC, Part QC, PD, Ca/Đổi khuôn, Box No. & CAV No. là ô trắng để ghi tay hoặc đóng dấu thực tế tại xưởng.",
-            font=ctk.CTkFont(size=10),
+            font=ctk.CTkFont(size=11),
             text_color=("#1E40AF", "#93C5FD"),
             wraplength=310,
             justify="left",
@@ -199,9 +199,9 @@ class LayoutTabPanel(ctk.CTkFrame):
         # Cam kết toàn vẹn mã QR
         ctk.CTkLabel(
             options_card,
-            text="🔒 Chuỗi QR Code (129 ký tự) luôn lưu đầy đủ 100% dữ liệu gốc bất kể tùy chọn hiển thị tem ở trên.",
-            font=ctk.CTkFont(size=9, slant="italic"),
-            text_color=("gray45", "gray55"),
+            text="🔒 Chuỗi mã QR (129 ký tự) luôn lưu đầy đủ 100% dữ liệu gốc bất kể tùy chọn hiển thị tem ở trên.",
+            font=ctk.CTkFont(size=11, slant="italic"),
+            text_color=("#475569", "#94A3B8"),
             wraplength=310,
             justify="left",
         ).grid(row=4, column=0, sticky="w", padx=12, pady=(0, 8))

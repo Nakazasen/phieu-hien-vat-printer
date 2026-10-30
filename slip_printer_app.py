@@ -24,8 +24,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--wait-for-pid", type=int)
     args, _unknown = parser.parse_known_args(argv)
     if args.health_check:
-        run_health_check()
-        return 0
+        try:
+            run_health_check()
+            return 0
+        except Exception as exc:
+            try:
+                if sys.stderr:
+                    sys.stderr.write(f"Health check failed: {exc}\n")
+            except Exception:
+                pass
+            return 1
     if args.wait_for_pid is not None:
         try:
             _wait_for_process_exit(args.wait_for_pid)

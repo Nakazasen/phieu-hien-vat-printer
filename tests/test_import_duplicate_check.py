@@ -76,7 +76,7 @@ def test_import_from_excel_no_duplicates(tk_root, tmp_path, monkeypatch):
     assert len(state.records) == 2
     assert state.records[0].po == "PO_CLEAN_01"
     assert state.records[1].po == "PO_CLEAN_02"
-    assert any("Đã import 2 dòng" in log for log in mock_view.logs)
+    assert any("Đã nhập 2 dòng" in log for log in mock_view.logs)
 
     state.po_registry.close()
 
@@ -128,7 +128,7 @@ def test_import_from_excel_with_duplicates_shows_warning_and_loads_all(tk_root, 
 
     # 3. Verify logs captured the warning and successful import
     assert any("Cảnh báo: Phát hiện 3 dòng trùng mã EDI" in log for log in mock_view.logs)
-    assert any("Đã import 4 dòng từ Excel" in log for log in mock_view.logs)
+    assert any("Đã nhập 4 dòng từ Excel" in log for log in mock_view.logs)
 
     state.po_registry.close()
 
@@ -240,7 +240,7 @@ def test_import_from_excel_empty_path_warning(tk_root, monkeypatch):
     controller.import_from_excel()
 
     assert len(warnings) == 1
-    assert "chưa chọn đường dẫn file excel" in warnings[0][1].lower()
+    assert "chưa chọn đường dẫn tệp excel" in warnings[0][1].lower()
     assert len(state.records) == 0
 
     state.po_registry.close()
@@ -264,7 +264,7 @@ def test_import_from_excel_empty_sheet_loads_empty_records(tk_root, tmp_path, mo
 
     assert len(warnings) == 0
     assert len(state.records) == 0
-    assert any("Đã import 0 dòng từ Excel" in log for log in mock_view.logs)
+    assert any("Đã nhập 0 dòng từ Excel" in log for log in mock_view.logs)
 
     state.po_registry.close()
 
@@ -293,10 +293,10 @@ def test_import_from_excel_invalid_revision_stops_before_duplicate_check(tk_root
     controller.import_from_excel()
 
     assert len(errors) == 1
-    assert "Không thể đọc dữ liệu từ file Excel" in errors[0][1]
+    assert "Không thể đọc dữ liệu từ tệp Excel" in errors[0][1]
     assert len(warnings) == 0
     assert len(state.records) == 0
-    assert any("Lỗi import Excel" in log for log in mock_view.logs)
+    assert any("Lỗi nhập dữ liệu Excel" in log for log in mock_view.logs)
 
     state.po_registry.close()
 
@@ -467,8 +467,8 @@ def test_treeview_tag_configuration_and_duplicate_highlighting(tk_root, tmp_path
     # 1. Verify tag configure exists on Treeview
     tag_bg = data_tab.preview_tree.tag_configure("duplicate", "background")
     tag_fg = data_tab.preview_tree.tag_configure("duplicate", "foreground")
-    assert str(tag_bg).lower() == "#fee2e2"
-    assert str(tag_fg).lower() == "#991b1b"
+    assert str(tag_bg).lower() in ("#fee2e2", "#450a0a")
+    assert str(tag_fg).lower() in ("#991b1b", "#fca5a5")
 
     # 2. Register PO_DUP in database
     state.po_registry.register_combo("PO_DUP", "00010", "+001", "001/001")

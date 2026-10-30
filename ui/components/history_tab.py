@@ -2,7 +2,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import customtkinter as ctk
 
-from ui.app_controller import APP_TITLE, AppController
+from ui.app_controller import APP_TITLE, AppController, format_error_for_user
 
 
 class HistoryTabPanel(ctk.CTkFrame):
@@ -172,7 +172,9 @@ class HistoryTabPanel(ctk.CTkFrame):
                     f"Đang hiển thị {len(records)} bản ghi đăng ký gần nhất trong cơ sở dữ liệu."
                 )
         except Exception as exc:  # noqa: BLE001
-            self.app_state.history_status_var.set(f"Lỗi khi tải lịch sử: {exc}")
+            self.app_state.history_status_var.set(
+                f"Không thể tải lịch sử đăng ký: {format_error_for_user(exc, 'tải lịch sử đăng ký')}"
+            )
 
     def clear_and_refresh(self) -> None:
         self.app_state.history_search_var.set("")
@@ -180,9 +182,9 @@ class HistoryTabPanel(ctk.CTkFrame):
 
     def export_history(self) -> None:
         file_path = filedialog.asksaveasfilename(
-            title="Lưu file lịch sử đăng ký EDI",
+            title="Lưu tệp lịch sử đăng ký EDI",
             defaultextension=".csv",
-            filetypes=[("CSV file (mở bằng Excel)", "*.csv"), ("All files", "*.*")],
+            filetypes=[("Tệp CSV (mở bằng Excel)", "*.csv"), ("Tất cả tệp", "*.*")],
             initialfile="LichSu_DangKy_EDI.csv",
         )
         if not file_path:
@@ -193,12 +195,12 @@ class HistoryTabPanel(ctk.CTkFrame):
             total_exported = self.app_state.po_registry.export_history_to_csv(file_path, search=search_query)
             messagebox.showinfo(
                 APP_TITLE,
-                f"Đã xuất thành công {total_exported} bản ghi lịch sử ra file:\n{file_path}\n\n"
-                "👉 Bạn có thể mở file này trực tiếp bằng Microsoft Excel để tra cứu và lưu trữ.",
+                f"Đã xuất thành công {total_exported} bản ghi lịch sử ra tệp:\n{file_path}\n\n"
+                "👉 Bạn có thể mở tệp này bằng Microsoft Excel để tra cứu và lưu trữ.",
             )
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror(
                 APP_TITLE,
-                f"Không thể xuất file lịch sử:\n{exc}\n\n"
-                "👉 Hướng dẫn: Vui lòng kiểm tra xem file CSV đích có đang bị mở bởi Excel không, hoặc chọn một thư mục lưu trữ khác có quyền ghi.",
+                f"Không thể xuất tệp lịch sử:\n{format_error_for_user(exc, 'xuất tệp lịch sử')}\n\n"
+                "👉 Hướng dẫn: Vui lòng kiểm tra xem tệp CSV có đang mở trong Excel không, hoặc chọn thư mục khác có quyền ghi.",
             )

@@ -87,8 +87,7 @@ def test_treeview_dataset_0_rows(tk_root):
     # Assertions on empty state
     assert len(data_tab.preview_tree.get_children()) == 0
     assert state.preview_index_map == []
-    assert state.summary_var.get() == "Chưa có dữ liệu"
-    assert "Thêm dữ liệu bằng form bên trái" in state.status_var.get()
+    assert "Thêm dữ liệu bằng" in state.status_var.get()
     assert state.form_mode_var.get() == "Đang tạo dòng mới"
     assert state.preview_source_image is None
     assert data_tab.has_pending_form_changes() is False

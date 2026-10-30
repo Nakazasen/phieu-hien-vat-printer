@@ -30,7 +30,7 @@ class PartMasterTabPanel(ctk.CTkFrame):
         title_frame.grid(row=0, column=0, padx=(16, 12), pady=10, sticky="w")
         ctk.CTkLabel(
             title_frame,
-            text="📋 Danh mục Master Linh Kiện",
+            text="📋 Danh mục linh kiện",
             font=ctk.CTkFont(size=15, weight="bold"),
         ).pack(side="left")
 
@@ -92,7 +92,7 @@ class PartMasterTabPanel(ctk.CTkFrame):
 
         ctk.CTkLabel(
             left_card,
-            text="📝 Thêm / Sửa Linh Kiện Master",
+            text="📝 Thêm / sửa linh kiện",
             font=ctk.CTkFont(size=14, weight="bold"),
         ).grid(row=0, column=0, columnspan=2, sticky="w", padx=14, pady=(14, 8))
 
@@ -144,23 +144,38 @@ class PartMasterTabPanel(ctk.CTkFrame):
         )
         self.entry_rev.grid(row=3, column=1, sticky="w", padx=(0, 14), pady=6)
 
+        # CAV No. hợp lệ (1–16)
+        ctk.CTkLabel(
+            left_card,
+            text="CAV No. (1–16):",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).grid(row=4, column=0, sticky="w", padx=14, pady=6)
+        self.entry_cav = ctk.CTkEntry(
+            left_card,
+            textvariable=self.app_state.master_cav_var,
+            placeholder_text="Ví dụ: 1, 2, 3, 4",
+            height=30,
+            font=ctk.CTkFont(size=12),
+        )
+        self.entry_cav.grid(row=4, column=1, sticky="ew", padx=(0, 14), pady=6)
+
         # Chú thích validation
         ctk.CTkLabel(
             left_card,
-            text="(*) Bắt buộc nhập đầy đủ thông tin.\nRev bắt buộc đúng 2 chữ số từ 01 đến 99.",
+            text="(*) Bắt buộc nhập đầy đủ thông tin.\nRev đúng 2 chữ số (01–99). CAV nhận số nguyên 1–16.",
             font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray60"),
             justify="left",
-        ).grid(row=4, column=0, columnspan=2, sticky="w", padx=14, pady=(2, 10))
+        ).grid(row=5, column=0, columnspan=2, sticky="w", padx=14, pady=(2, 10))
 
         # Nút hành động Form
         btn_box = ctk.CTkFrame(left_card, fg_color="transparent")
-        btn_box.grid(row=5, column=0, columnspan=2, sticky="ew", padx=14, pady=6)
+        btn_box.grid(row=6, column=0, columnspan=2, sticky="ew", padx=14, pady=6)
         btn_box.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.btn_save = ctk.CTkButton(
             btn_box,
-            text="💾 Lưu Master",
+            text="💾 Lưu linh kiện",
             height=34,
             font=ctk.CTkFont(size=12, weight="bold"),
             fg_color="#10B981",
@@ -205,16 +220,16 @@ class PartMasterTabPanel(ctk.CTkFrame):
             wraplength=310,
             justify="left",
         )
-        self.status_lbl.grid(row=6, column=0, columnspan=2, sticky="w", padx=14, pady=(8, 0))
+        self.status_lbl.grid(row=7, column=0, columnspan=2, sticky="w", padx=14, pady=(8, 0))
 
         # Tiện ích nạp từ danh sách hiện tại
         import_box = ctk.CTkFrame(left_card, corner_radius=8, fg_color=("gray90", "gray20"))
-        import_box.grid(row=7, column=0, columnspan=2, sticky="ew", padx=14, pady=(16, 10))
+        import_box.grid(row=8, column=0, columnspan=2, sticky="ew", padx=14, pady=(16, 10))
         import_box.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
             import_box,
-            text="💡 Mẹo: Có thể đồng bộ nhanh toàn bộ mã linh kiện từ bảng dữ liệu hiện tại vào Master:",
+            text="💡 Mẹo: Có thể đồng bộ nhanh toàn bộ mã linh kiện từ bảng dữ liệu hiện tại vào danh mục:",
             font=ctk.CTkFont(size=11),
             text_color=("gray30", "gray70"),
             wraplength=300,
@@ -223,7 +238,7 @@ class PartMasterTabPanel(ctk.CTkFrame):
 
         ctk.CTkButton(
             import_box,
-            text="📥 Nạp từ bảng in hiện tại vào Master",
+            text="📥 Nạp từ bảng in hiện tại vào danh mục",
             height=28,
             font=ctk.CTkFont(size=11, weight="bold"),
             fg_color=("#2563EB", "#1D4ED8"),
@@ -237,17 +252,19 @@ class PartMasterTabPanel(ctk.CTkFrame):
         right_card.grid_columnconfigure(0, weight=1)
         right_card.grid_rowconfigure(0, weight=1)
 
-        columns = ("item_code", "item_name", "rev", "updated_at")
+        columns = ("item_code", "item_name", "rev", "cav_list", "updated_at")
         self.tree = ttk.Treeview(right_card, columns=columns, show="headings")
         self.tree.heading("item_code", text="Mã linh kiện")
         self.tree.heading("item_name", text="Tên linh kiện")
         self.tree.heading("rev", text="Rev")
+        self.tree.heading("cav_list", text="CAV No.")
         self.tree.heading("updated_at", text="Cập nhật lần cuối")
 
-        self.tree.column("item_code", width=150, anchor="w")
-        self.tree.column("item_name", width=280, anchor="w")
-        self.tree.column("rev", width=65, anchor="center")
-        self.tree.column("updated_at", width=150, anchor="center")
+        self.tree.column("item_code", width=135, anchor="w")
+        self.tree.column("item_name", width=230, anchor="w")
+        self.tree.column("rev", width=55, anchor="center")
+        self.tree.column("cav_list", width=110, anchor="center")
+        self.tree.column("updated_at", width=140, anchor="center")
 
         tree_scroll_y = ttk.Scrollbar(right_card, orient="vertical", command=self.tree.yview)
         tree_scroll_x = ttk.Scrollbar(right_card, orient="horizontal", command=self.tree.xview)
@@ -299,7 +316,7 @@ class PartMasterTabPanel(ctk.CTkFrame):
                 "",
                 "end",
                 iid=entry.item_code,
-                values=(entry.item_code, entry.item_name, entry.rev, entry.updated_at),
+                values=(entry.item_code, entry.item_name, entry.rev, entry.cav_list, entry.updated_at),
             )
 
     def _on_tree_select(self, _event=None) -> None:
@@ -312,7 +329,9 @@ class PartMasterTabPanel(ctk.CTkFrame):
             self.app_state.master_item_code_var.set(entry.item_code)
             self.app_state.master_item_name_var.set(entry.item_name)
             self.app_state.master_rev_var.set(entry.rev)
-            self.app_state.master_status_var.set(f"Đang chọn: {entry.item_code} (Rev {entry.rev})")
+            self.app_state.master_cav_var.set(entry.cav_list)
+            cav_info = f" · CAV: {entry.cav_list}" if entry.cav_list else ""
+            self.app_state.master_status_var.set(f"Đang chọn: {entry.item_code} (Rev {entry.rev}{cav_info})")
 
     def _on_tree_double_click(self, _event=None) -> None:
         """Double-click to apply to main Data Tab and switch view."""
@@ -325,10 +344,11 @@ class PartMasterTabPanel(ctk.CTkFrame):
             self.app_state.item_code_var.set(entry.item_code)
             self.app_state.item_name_var.set(entry.item_name)
             self.app_state.rev_var.set(entry.rev)
+            self.controller.on_item_code_input_changed()
             if hasattr(self.controller, "view") and hasattr(self.controller.view, "notebook"):
                 self.controller.view.notebook.select(0)
                 if self.controller.view:
-                    self.controller.view.append_log(f"Master: Đã chuyển mã {entry.item_code} sang Form in phiếu")
+                    self.controller.view.append_log(f"Danh mục linh kiện: Đã chuyển mã {entry.item_code} sang biểu mẫu in phiếu")
 
     def _import_from_active_records(self) -> None:
         """Sync valid records currently loaded in the print table to Master."""
@@ -352,5 +372,5 @@ class PartMasterTabPanel(ctk.CTkFrame):
         self.refresh_table()
         messagebox.showinfo(
             APP_TITLE,
-            f"Đã đồng bộ thành công {added_count} mã linh kiện từ bảng in vào Master!",
+            f"Đã đồng bộ thành công {added_count} mã linh kiện từ bảng in vào danh mục!",
         )

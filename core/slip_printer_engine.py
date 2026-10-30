@@ -20,24 +20,137 @@ import fitz
 import qrcode
 from PIL import Image
 from PyPDF2 import PageObject, PdfReader, PdfWriter
+from reportlab.graphics.barcode import code39
 from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4, landscape, letter
 from reportlab.pdfgen import canvas
 
 ProgressCallback = Callable[[int, int, str], None]
 
-# The user prints only the EDI label in the top-right quarter of template.pdf.
-# Coordinates are PDF points in the template's landscape-A4 coordinate system.
-EDI_TEMPLATE_CROP = fitz.Rect(558.6, 0.0, 841.92, 287.76)
+# Standard Code 39 character set: 0-9, A-Z, space, and symbols: - . $ / + %
+VALID_CODE39_CHARS = frozenset("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-. $/+%")
+
+
+def validate_code39_text(raw_code: str) -> str:
+    """Validate that raw_code only contains valid Standard Code 39 characters.
+
+    Slices to first 10 characters and converts to uppercase.
+    Raises ValueError if unsupported characters (such as underscore '_') are found,
+    preventing silent character dropping by ReportLab Standard39.
+    """
+    if not raw_code:
+        return ""
+    code_text = str(raw_code).strip().upper()[:10]
+    unsupported = [c for c in code_text if c not in VALID_CODE39_CHARS]
+    if unsupported:
+        unique_unsupported = "".join(sorted(set(unsupported)))
+        raise ValueError(
+            f"Mã linh kiện '{raw_code}' chứa ký tự '{unique_unsupported}' không hợp lệ đối với mã vạch 1D Code 39. "
+            f"Code 39 chỉ hỗ trợ ký tự chữ in hoa A-Z, chữ số 0-9 và các ký tự: - . $ / + % và khoảng trắng."
+        )
+    return code_text
+
+# Exact outer black border of EDI slip: width = 273.12 pt, height = 276.24 pt.
+# 100% Original Scale (No shrinking).
+EDI_TEMPLATE_CROP = fitz.Rect(563.64, 3.96, 836.76, 280.20)
+EDI_LABEL_WIDTH = 273.12  # Giữ nguyên kích thước 100% tỷ lệ gốc (không co tỉ lệ)
+EDI_LABEL_HEIGHT = 276.24
+
+# Default A4 6-Slip Layout (2 columns x 3 rows) with maximized clearance gap (margin = 0)
 EDI_COLUMNS = 2
-EDI_ROWS = 2
+EDI_ROWS = 3
 EDI_PER_A4_PAGE = EDI_COLUMNS * EDI_ROWS
-EDI_COLUMN_GAP = 11.34  # 4 mm, leaving a practical cut gutter.
-EDI_ROW_GAP = 11.34
+EDI_COLUMN_GAP = 49.035  # 17.30 mm khe hở giữa 2 cột (tối đa hóa khi lề trái/phải = 0 mm cho dao cắt lớn)
+EDI_ROW_GAP = 6.584      # 2.32 mm khe hở giữa các hàng (tối đa hóa chiều dọc thừa của A4 khi lề trên/dưới = 0 mm)
+EDI_LEFT_MARGIN = 0.0    # Lề trái = 0 mm, đường cắt dọc giữa đúng trục đối xứng X = 297.64 pt
+EDI_TOP_MARGIN = 0.0     # Lề trên = 0 mm, lề dưới = 0 mm
+
+
+@dataclass(frozen=True)
+class PaperLayout:
+    name: str
+    page_width: float
+    page_height: float
+    columns: int
+    rows: int
+    per_page: int
+    label_width: float
+    label_height: float
+    left_margin: float
+    top_margin: float
+    column_gap: float
+    row_gap: float
+    midline_x: float
+    draw_cut_guides: bool = True
+
+
+def get_paper_layout(paper_size: str = "A4") -> PaperLayout:
+    """Resolve 100% unscaled paper layout for A4 (6 slips) or Letter (4 slips).
+
+    - A4 (210 x 297 mm): 2 cols x 3 rows = 6 slips/page. 5.0 mm column gap down X=297.64 pt.
+    - Letter (215.9 x 279.4 mm): 2 cols x 2 rows = 4 slips/page. 5.0 mm gap both horizontally
+      and vertically, centered down X=306.0 pt and Y=396.0 pt.
+    """
+    norm = str(paper_size or "").strip().lower()
+    if norm in ("letter", "us-letter", "usletter"):
+        return PaperLayout(
+            name="Letter",
+            page_width=letter[0],
+            page_height=letter[1],
+            columns=2,
+            rows=2,
+            per_page=4,
+            label_width=EDI_LABEL_WIDTH,
+            label_height=EDI_LABEL_HEIGHT,
+            left_margin=25.795,
+            top_margin=112.675,
+            column_gap=14.17,
+            row_gap=14.17,
+            midline_x=306.00,
+            draw_cut_guides=True,
+        )
+    return PaperLayout(
+        name="A4",
+        page_width=A4[0],
+        page_height=A4[1],
+        columns=2,
+        rows=3,
+        per_page=6,
+        label_width=EDI_LABEL_WIDTH,
+        label_height=EDI_LABEL_HEIGHT,
+        left_margin=EDI_LEFT_MARGIN,
+        top_margin=EDI_TOP_MARGIN,
+        column_gap=EDI_COLUMN_GAP,
+        row_gap=EDI_ROW_GAP,
+        midline_x=297.64,
+        draw_cut_guides=True,
+    )
+
+
+def _draw_cut_guides(output_page: fitz.Page, layout: PaperLayout) -> None:
+    """Draw subtle dashed cutting guidelines down gap centers for guillotine cutter alignment."""
+    cut_color = (0.75, 0.75, 0.75)  # Light subtle gray
+    # Vertical cut guide line down center of column gap (X = midline_x)
+    output_page.draw_line(
+        fitz.Point(layout.midline_x, 0),
+        fitz.Point(layout.midline_x, layout.page_height),
+        color=cut_color,
+        width=0.5,
+        dashes="[2 2] 0",
+    )
+    # Horizontal cut guide lines down center of row gaps
+    for r in range(layout.rows - 1):
+        y_gap_center = layout.top_margin + (r + 1) * layout.label_height + (r + 0.5) * layout.row_gap
+        output_page.draw_line(
+            fitz.Point(0, y_gap_center),
+            fitz.Point(layout.page_width, y_gap_center),
+            color=cut_color,
+            width=0.5,
+            dashes="[2 2] 0",
+        )
+
+
 REV_PATTERN = re.compile(r"^(?:0[1-9]|[1-9][0-9])$")
-EDI_TOP_MARGIN = 11.34
-EDI_LABEL_WIDTH = EDI_TEMPLATE_CROP.width
-EDI_LABEL_HEIGHT = EDI_TEMPLATE_CROP.height
-EDI_LEFT_MARGIN = (A4[0] - (EDI_COLUMNS * EDI_LABEL_WIDTH) - EDI_COLUMN_GAP) / 2
 
 START_ROW = 28
 MAX_COL = 10
@@ -62,6 +175,8 @@ FIELD_LABELS = {
     "box": "Số box",
     "rev": "Rev",
     "lot": "Ngày/Lot",
+    "cav_no": "CAV No.",
+    "barcode_item_code": "Mã vạch 1D linh kiện (Code 39)",
 }
 
 DEFAULT_LAYOUT_CONFIG: dict[str, Any] = {
@@ -69,6 +184,20 @@ DEFAULT_LAYOUT_CONFIG: dict[str, Any] = {
     "qr_positions": {
         "qr_122": {"label": "QR 122 ký tự", "x": 200, "y": 150, "width": 100, "height": 100},
         "qr_full": {"label": "QR đầy đủ", "x": 710, "y": 270, "width": 100, "height": 100},
+    },
+    "barcode_positions": {
+        "barcode_item_code": {
+            "label": "Mã vạch 1D linh kiện (Code 39)",
+            "field": "item_code",
+            "x": 711,
+            "y": 162,
+            "width": 0.65,
+            "height": 28.0,
+            "barWidth": 0.65,
+            "barHeight": 28.0,
+            "checksum": 0,
+            "humanReadable": False,
+        }
     },
     "text_positions": [
         {"id": "po_top", "label": "PO trên trái", "field": "po", "x": 400, "y": 180},
@@ -91,6 +220,7 @@ DEFAULT_LAYOUT_CONFIG: dict[str, Any] = {
         {"id": "qty_right_1", "label": "SL phải 1", "field": "carton_qty", "x": 670, "y": 100},
         {"id": "qty_right_2", "label": "SL phải 2", "field": "total_qty", "x": 750, "y": 100},
         {"id": "lot_right_1", "label": "Lot phải 1", "field": "lot", "x": 610, "y": 150},
+        {"id": "cav_right_1", "label": "CAV No. phải 1", "field": "cav_no", "x": 684, "y": 258},
         {"id": "po_bottom", "label": "PO dưới", "field": "po", "x": 380, "y": 380},
         {"id": "po_detail_bottom", "label": "PO chi tiết dưới", "field": "po_detail", "x": 440, "y": 380},
         {"id": "po_sub_bottom", "label": "PO phụ dưới", "field": "po_sub", "x": 480, "y": 380},
@@ -120,6 +250,7 @@ class SlipRecord:
     rev: str
     lot: str
     qr_payload: str = ""
+    cav_no: str = ""
 
     def with_payload(self) -> SlipRecord:
         return replace(self, qr_payload=build_qr_payload(self))
@@ -161,6 +292,7 @@ class SlipRecord:
             "box": self.box,
             "rev": self.rev,
             "lot": self.lot,
+            "cav_no": self.cav_no,
         }
 
 
@@ -284,6 +416,7 @@ def create_record(
     box: object,
     rev: object,
     lot: object | None = None,
+    cav_no: object | None = None,
 ) -> SlipRecord:
     # Normalize once at the record boundary so pasted/manual, Excel and QR data
     # all produce the same printable EDI values.
@@ -292,6 +425,7 @@ def create_record(
     carton_qty_text = _string_value(carton_qty).strip().replace(",", "")
     normalized_box = normalize_box(_string_value(box).strip())
     total_qty_text = calculate_total_qty(carton_qty_text, normalized_box)
+    cav_no_text = _string_value(cav_no).strip()
     record = SlipRecord(
         row_number=row_number,
         item_code=item_code_text,
@@ -304,6 +438,7 @@ def create_record(
         box=normalized_box,
         rev=_string_value(rev).strip(),
         lot=normalize_lot(_string_value(lot).strip()),
+        cav_no=cav_no_text,
     )
     return record.with_payload()
 
@@ -335,7 +470,27 @@ def ensure_layout_config_file(config_path: str | Path) -> Path:
 
 def load_layout_config(config_path: str | Path) -> dict[str, Any]:
     path = ensure_layout_config_file(config_path)
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    default_cfg = get_default_layout_config()
+    dirty = False
+    for k, v in default_cfg.items():
+        if k not in data:
+            data[k] = deepcopy(v)
+            dirty = True
+        elif isinstance(v, dict):
+            for sub_k, sub_v in v.items():
+                if sub_k not in data[k]:
+                    data[k][sub_k] = deepcopy(sub_v)
+                    dirty = True
+        elif k == "text_positions" and isinstance(v, list) and isinstance(data.get(k), list):
+            existing_ids = {item.get("id") for item in data[k] if isinstance(item, dict)}
+            for default_item in v:
+                if default_item.get("id") not in existing_ids:
+                    data[k].append(deepcopy(default_item))
+                    dirty = True
+    if dirty:
+        save_layout_config(data, path)
+    return data
 
 
 def save_layout_config(config: dict[str, Any], config_path: str | Path) -> None:
@@ -357,6 +512,19 @@ def list_layout_items(config: dict[str, Any]) -> list[dict[str, Any]]:
                 "y": value["y"],
                 "width": value["width"],
                 "height": value["height"],
+            }
+        )
+    for key, value in config.get("barcode_positions", {}).items():
+        items.append(
+            {
+                "kind": "barcode",
+                "id": key,
+                "label": value.get("label", key),
+                "field": value.get("field", "item_code"),
+                "x": value["x"],
+                "y": value["y"],
+                "width": value.get("barWidth", value.get("width")),
+                "height": value.get("barHeight", value.get("height")),
             }
         )
     for value in config.get("text_positions", []):
@@ -392,6 +560,18 @@ def update_layout_item(
             updated["qr_positions"][item_id]["width"] = width
         if height is not None:
             updated["qr_positions"][item_id]["height"] = height
+        return updated
+
+    if item_id in updated.get("barcode_positions", {}):
+        barcode = updated["barcode_positions"][item_id]
+        barcode["x"] = x
+        barcode["y"] = y
+        if width is not None:
+            barcode["width"] = width
+            barcode["barWidth"] = width
+        if height is not None:
+            barcode["height"] = height
+            barcode["barHeight"] = height
         return updated
 
     for item in updated.get("text_positions", []):
@@ -547,6 +727,16 @@ def parse_qr_payload(payload: str) -> QRParsedData:
 
     # Box at 122.. (remaining chars, e.g. 7 chars)
     box_segment = clean_payload[122:].strip()
+    if not box_segment:
+        # Check if box is placed in trailing space region (e.g. 122-char legacy with shorter space padding before box)
+        trailer = clean_payload[98:].strip()
+        if trailer:
+            match = re.search(r"(\d{1,3}/\d{1,3})", trailer)
+            if match:
+                box_segment = match.group(1)
+            elif trailer.isdigit() and int(trailer) > 0:
+                box_segment = trailer
+
     if not box_segment:
         box = "001/001"
     else:
@@ -777,6 +967,10 @@ def validate_records(
     for index, record in enumerate(records, start=1):
         if not record.item_code.strip():
             raise ValueError(f"Dòng {index}: thiếu mã hàng.")
+        try:
+            validate_code39_text(record.item_code)
+        except ValueError as exc:
+            raise ValueError(f"Dòng {index}: {exc}") from exc
         if not record.item_name.strip():
             raise ValueError(f"Dòng {index}: thiếu tên hàng.")
         if not record.carton_qty.strip():
@@ -904,6 +1098,91 @@ def create_overlay_pdf(records: list[SlipRecord], layout_config: dict[str, Any])
     return buffer
 
 
+def _wrap_cav_lines(
+    pdf_canvas: canvas.Canvas,
+    cav_text: str,
+    font_name: str,
+    font_size: float,
+    max_width: float,
+) -> list[str]:
+    """Wrap a comma-separated CAV string so each line fits within `max_width`."""
+    raw_parts = [p.strip() for p in cav_text.split(",") if p.strip()]
+    if not raw_parts:
+        return [cav_text]
+
+    tokens = [
+        f"{part}," if idx < len(raw_parts) - 1 else part
+        for idx, part in enumerate(raw_parts)
+    ]
+    lines: list[str] = []
+    current = ""
+    for tok in tokens:
+        candidate = f"{current} {tok}".strip() if current else tok
+        if pdf_canvas.stringWidth(candidate, font_name, font_size) <= max_width or not current:
+            current = candidate
+        else:
+            lines.append(current)
+            current = tok
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _draw_cav_text_in_box(
+    pdf_canvas: canvas.Canvas,
+    cav_text: str,
+    item_x: float,
+    item_y: float,
+    page_height: float,
+    font_name: str,
+    base_font_size: float,
+) -> None:
+    """Draw CAV No. inside the dedicated template cell (x: 659.76..708.00, y: 241.83..280.08).
+
+    Automatically wraps lines or adjusts font size down to a readable minimum (6.5 pt)
+    so long CAV lists (e.g. 1..16) never overflow into neighboring boxes.
+    """
+    clean_text = str(cav_text or "").strip()
+    if not clean_text:
+        return
+
+    max_box_width = 44.0   # Usable inner width inside the 48.24 pt CAV No. column
+    max_box_height = 33.0  # Usable inner height inside the 38.25 pt CAV No. value cell
+
+    chosen_size = float(base_font_size)
+    chosen_lines = [clean_text]
+
+    candidate_sizes = [float(base_font_size), 9.0, 8.5, 8.0, 7.5, 7.0, 6.5]
+    for fsize in candidate_sizes:
+        if fsize > float(base_font_size):
+            continue
+        lines = _wrap_cav_lines(pdf_canvas, clean_text, font_name, fsize, max_box_width)
+        line_h = fsize * 1.15
+        fits_width = all(pdf_canvas.stringWidth(line, font_name, fsize) <= max_box_width for line in lines)
+        fits_height = (len(lines) * line_h) <= max_box_height
+        chosen_size = fsize
+        chosen_lines = lines
+        if fits_width and fits_height:
+            break
+
+    pdf_canvas.setFont(font_name, chosen_size)
+    try:
+        if len(chosen_lines) == 1:
+            pdf_canvas.drawCentredString(item_x, page_height - item_y, chosen_lines[0])
+        else:
+            line_h = chosen_size * 1.15
+            # Center multi-line block around the vertical middle of the CAV cell
+            total_span = (len(chosen_lines) - 1) * line_h
+            # Default item_y=258 is near vertical middle; shift slightly so baseline block is centered
+            center_baseline_y = item_y + 3.0
+            start_y = center_baseline_y - (total_span / 2.0)
+            for idx, line_str in enumerate(chosen_lines):
+                y_pos = start_y + idx * line_h
+                pdf_canvas.drawCentredString(item_x, page_height - y_pos, line_str)
+    finally:
+        pdf_canvas.setFont(font_name, base_font_size)
+
+
 def _draw_record_page(pdf_canvas: canvas.Canvas, record: SlipRecord, layout_config: dict[str, Any]) -> None:
     _, height = landscape(A4)
     qr_image_full = generate_qr_code(record.qr_payload)
@@ -926,6 +1205,38 @@ def _draw_record_page(pdf_canvas: canvas.Canvas, record: SlipRecord, layout_conf
         width=qr_full["width"],
         height=qr_full["height"],
     )
+
+    # 1D Barcode Code 39 (Mã vạch linh kiện đặt ngay phía trên mã QR, không hiện text chân)
+    barcode_positions = layout_config.get("barcode_positions", {})
+    for bc_item in barcode_positions.values():
+        field_name = bc_item.get("field", "item_code")
+        raw_code = getattr(record, field_name, "") if hasattr(record, field_name) else ""
+        if not raw_code:
+            values_map = record.as_field_map()
+            raw_code = values_map.get(field_name, "")
+        code_text = validate_code39_text(str(raw_code or ""))
+        if code_text:
+            bar_width = float(bc_item.get("barWidth", bc_item.get("width", 0.65)))
+            bar_height = float(bc_item.get("barHeight", bc_item.get("height", 28.0)))
+            checksum = int(bc_item.get("checksum", 0))
+            lquiet = float(bc_item.get("lquiet", 6.0))
+            rquiet = float(bc_item.get("rquiet", 6.0))
+            bc = code39.Standard39(
+                code_text,
+                checksum=checksum,
+                barWidth=bar_width,
+                barHeight=bar_height,
+                lquiet=lquiet,
+                rquiet=rquiet,
+                humanReadable=False,
+            )
+            bc.validate()
+            if not getattr(bc, "valid", 1) or getattr(bc, "validated", None) != code_text:
+                raise ValueError(
+                    f"Mã linh kiện '{raw_code}' không thể mã hóa nguyên vẹn bằng Code 39. "
+                    f"Mã sau khi lọc: '{getattr(bc, 'validated', '')}' != '{code_text}'"
+                )
+            bc.drawOn(pdf_canvas, bc_item["x"], height - bc_item["y"])
 
     font = layout_config["font"]
     pdf_canvas.setFont(font["name"], font["size"])
@@ -956,6 +1267,20 @@ def _draw_record_page(pdf_canvas: canvas.Canvas, record: SlipRecord, layout_conf
         if item_id == "box_right_1" and hide_package_qty:
             continue
 
+        # 3. CAV No. cell rendering (auto-wrap & auto-fit inside CAV No. box)
+        if item.get("field") == "cav_no" or item_id == "cav_right_1":
+            cav_val = values.get("cav_no", "")
+            _draw_cav_text_in_box(
+                pdf_canvas,
+                cav_val,
+                float(item["x"]),
+                float(item["y"]),
+                height,
+                font["name"],
+                float(font["size"]),
+            )
+            continue
+
         text = values.get(item["field"], "")
         pdf_canvas.drawString(item["x"], height - item["y"], text)
     pdf_canvas.showPage()
@@ -980,20 +1305,21 @@ def _merge_overlay_with_template_pages(overlay_pdf_stream: BytesIO, template_pdf
     return output_buffer.getvalue()
 
 
-def _compose_edi_labels_on_a4(merged_label_pdf_bytes: bytes) -> bytes:
-    """Crop one EDI label per record and place up to four labels on portrait A4."""
+def _compose_edi_labels_on_a4(merged_label_pdf_bytes: bytes, paper_size: str = "A4") -> bytes:
+    """Crop one EDI label per record and place labels on A4 (2x3=6) or Letter (2x2=4) at 100% scale."""
+    layout = get_paper_layout(paper_size)
     source = fitz.open(stream=merged_label_pdf_bytes, filetype="pdf")
     output = fitz.open()
     try:
-        for first_label_index in range(0, source.page_count, EDI_PER_A4_PAGE):
-            output_page = output.new_page(width=A4[0], height=A4[1])
-            labels_on_page = min(EDI_PER_A4_PAGE, source.page_count - first_label_index)
+        for first_label_index in range(0, source.page_count, layout.per_page):
+            output_page = output.new_page(width=layout.page_width, height=layout.page_height)
+            labels_on_page = min(layout.per_page, source.page_count - first_label_index)
             for position in range(labels_on_page):
-                column = position % EDI_COLUMNS
-                row = position // EDI_COLUMNS
-                x0 = EDI_LEFT_MARGIN + column * (EDI_LABEL_WIDTH + EDI_COLUMN_GAP)
-                y0 = EDI_TOP_MARGIN + row * (EDI_LABEL_HEIGHT + EDI_ROW_GAP)
-                destination = fitz.Rect(x0, y0, x0 + EDI_LABEL_WIDTH, y0 + EDI_LABEL_HEIGHT)
+                column = position % layout.columns
+                row = position // layout.columns
+                x0 = layout.left_margin + column * (layout.label_width + layout.column_gap)
+                y0 = layout.top_margin + row * (layout.label_height + layout.row_gap)
+                destination = fitz.Rect(x0, y0, x0 + layout.label_width, y0 + layout.label_height)
                 output_page.show_pdf_page(
                     destination,
                     source,
@@ -1002,15 +1328,35 @@ def _compose_edi_labels_on_a4(merged_label_pdf_bytes: bytes) -> bytes:
                     keep_proportion=True,
                     overlay=True,
                 )
+            if layout.draw_cut_guides:
+                _draw_cut_guides(output_page, layout)
         return output.tobytes(garbage=4, deflate=True)
     finally:
         output.close()
         source.close()
 
 
-def merge_overlay_with_template_bytes(overlay_pdf_stream: BytesIO, template_pdf_path: str | Path) -> bytes:
+_compose_edi_labels_on_page = _compose_edi_labels_on_a4
+
+
+def calculate_a4_page_count(record_count: int, paper_size: str = "A4") -> int:
+    """Calculate the number of pages required for record_count slips (A4: 6/page, Letter: 4/page)."""
+    if record_count <= 0:
+        return 0
+    layout = get_paper_layout(paper_size)
+    return (record_count + layout.per_page - 1) // layout.per_page
+
+
+calculate_page_count = calculate_a4_page_count
+
+
+def merge_overlay_with_template_bytes(
+    overlay_pdf_stream: BytesIO,
+    template_pdf_path: str | Path,
+    paper_size: str = "A4",
+) -> bytes:
     merged_labels = _merge_overlay_with_template_pages(overlay_pdf_stream, template_pdf_path)
-    return _compose_edi_labels_on_a4(merged_labels)
+    return _compose_edi_labels_on_a4(merged_labels, paper_size=paper_size)
 
 # Đã thay thế merge_overlay_with_template bằng logic chia lô (batching) trong generate_pdf_from_records.
 
@@ -1060,9 +1406,23 @@ def generate_pdf_from_records(
     layout_config: dict[str, Any] | None = None,
     progress_callback: ProgressCallback | None = None,
     registry: PORegistry | None = None,
+    paper_size: str = "A4",
 ) -> list[SlipRecord]:
-    normalized_records = validate_records(records, registry=registry)
     current_layout = layout_config or get_default_layout_config()
+    barcode_positions = current_layout.get("barcode_positions", {})
+    for index, record in enumerate(records, start=1):
+        for bc_item in barcode_positions.values():
+            field_name = bc_item.get("field", "item_code")
+            raw_code = getattr(record, field_name, "") if hasattr(record, field_name) else ""
+            if not raw_code:
+                values_map = record.as_field_map()
+                raw_code = values_map.get(field_name, "")
+            try:
+                validate_code39_text(str(raw_code or ""))
+            except ValueError as exc:
+                raise ValueError(f"Dòng {index}: {exc}") from exc
+
+    normalized_records = validate_records(records, registry=registry)
     total_records = len(normalized_records)
 
     if progress_callback:
@@ -1072,6 +1432,7 @@ def generate_pdf_from_records(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     # Gom tất cả label PDF lại (chưa dàn trang A4)
+    # Gom tất cả label PDF lại (chưa dàn trang)
     all_labels_pdf = fitz.open()
 
     # Bước 1 & 2: Sinh Overlay và Merge theo lô để tiết kiệm RAM (đặc biệt là tránh PyPDF2 ngốn RAM)
@@ -1087,21 +1448,22 @@ def generate_pdf_from_records(
         if progress_callback:
             progress_callback(min(i + len(batch), total_records), total_records, f"Đã ghép {min(i + len(batch), total_records)}/{total_records} tem")
 
-    # Bước 3: Dàn trang A4 (4 tem / trang)
+    # Bước 3: Dàn trang theo khổ giấy chỉ định (A4: 6 tem/trang, Letter: 4 tem/trang)
+    layout = get_paper_layout(paper_size)
     output_pdf = fitz.open()
     try:
         if progress_callback:
-            progress_callback(total_records, total_records, "Đang dàn trang A4...")
-            
-        for first_label_index in range(0, all_labels_pdf.page_count, EDI_PER_A4_PAGE):
-            output_page = output_pdf.new_page(width=A4[0], height=A4[1])
-            labels_on_page = min(EDI_PER_A4_PAGE, all_labels_pdf.page_count - first_label_index)
+            progress_callback(total_records, total_records, f"Đang dàn trang {layout.name} ({layout.per_page} tem/trang)...")
+
+        for first_label_index in range(0, all_labels_pdf.page_count, layout.per_page):
+            output_page = output_pdf.new_page(width=layout.page_width, height=layout.page_height)
+            labels_on_page = min(layout.per_page, all_labels_pdf.page_count - first_label_index)
             for position in range(labels_on_page):
-                column = position % EDI_COLUMNS
-                row = position // EDI_COLUMNS
-                x0 = EDI_LEFT_MARGIN + column * (EDI_LABEL_WIDTH + EDI_COLUMN_GAP)
-                y0 = EDI_TOP_MARGIN + row * (EDI_LABEL_HEIGHT + EDI_ROW_GAP)
-                destination = fitz.Rect(x0, y0, x0 + EDI_LABEL_WIDTH, y0 + EDI_LABEL_HEIGHT)
+                column = position % layout.columns
+                row = position // layout.columns
+                x0 = layout.left_margin + column * (layout.label_width + layout.column_gap)
+                y0 = layout.top_margin + row * (layout.label_height + layout.row_gap)
+                destination = fitz.Rect(x0, y0, x0 + layout.label_width, y0 + layout.label_height)
                 output_page.show_pdf_page(
                     destination,
                     all_labels_pdf,
@@ -1110,10 +1472,12 @@ def generate_pdf_from_records(
                     keep_proportion=True,
                     overlay=True,
                 )
-        
+            if layout.draw_cut_guides:
+                _draw_cut_guides(output_page, layout)
+
         if progress_callback:
-            progress_callback(total_records, total_records, f"Đang lưu file PDF ({output_pdf.page_count} trang A4)...")
-            
+            progress_callback(total_records, total_records, f"Đang lưu file PDF ({output_pdf.page_count} trang {layout.name})...")
+
         output_pdf.save(str(output_path), garbage=4, deflate=True)
     finally:
         output_pdf.close()
@@ -1129,6 +1493,7 @@ def generate_pdf_from_excel(
     *,
     layout_config: dict[str, Any] | None = None,
     progress_callback: ProgressCallback | None = None,
+    paper_size: str = "A4",
 ) -> list[SlipRecord]:
     records = read_records(excel_file)
     if not records:
@@ -1139,4 +1504,5 @@ def generate_pdf_from_excel(
         output_pdf_path,
         layout_config=layout_config,
         progress_callback=progress_callback,
+        paper_size=paper_size,
     )

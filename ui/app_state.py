@@ -50,6 +50,7 @@ class AppState:
         self.summary_var = ctk.StringVar(master=self.root, value="Chưa có dữ liệu")
         self.preview_limit_var = ctk.StringVar(master=self.root, value="50")
         self.form_mode_var = ctk.StringVar(master=self.root, value="Đang tạo dòng mới")
+        self.paper_size_var = ctk.StringVar(master=self.root, value="A4")
 
         # Form fields
         self.item_code_var = ctk.StringVar(master=self.root)
@@ -62,6 +63,12 @@ class AppState:
         self.box_var = ctk.StringVar(master=self.root)
         self.rev_var = ctk.StringVar(master=self.root)
         self.lot_var = ctk.StringVar(master=self.root)
+        self.cav_var = ctk.StringVar(master=self.root, value="")
+        self.split_cav_var = ctk.BooleanVar(master=self.root, value=False)
+        self.valid_cavs: list[int] = []
+        self.selected_cavs: list[int] = []
+        self.cav_source: str = "none"
+        self.inspection_root_var = ctk.StringVar(master=self.root, value="")
 
         # Layout editor fields
         self.layout_choice_var = ctk.StringVar(master=self.root, value="")
@@ -83,6 +90,7 @@ class AppState:
         self.master_item_code_var = ctk.StringVar(master=self.root, value="")
         self.master_item_name_var = ctk.StringVar(master=self.root, value="")
         self.master_rev_var = ctk.StringVar(master=self.root, value="01")
+        self.master_cav_var = ctk.StringVar(master=self.root, value="")
         self.master_search_var = ctk.StringVar(master=self.root, value="")
         self.master_status_var = ctk.StringVar(master=self.root, value="")
         self.master_count_var = ctk.StringVar(master=self.root, value="0")

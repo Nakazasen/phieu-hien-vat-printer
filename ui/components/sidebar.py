@@ -26,30 +26,66 @@ class SidebarPanel(ctk.CTkScrollableFrame):
         ).grid(row=1, column=0, sticky="w", padx=24, pady=(0, 4))
         ctk.CTkLabel(
             self,
-            text="Chọn Excel để import hoặc nhập trực tiếp, kiểm tra dữ liệu rồi tạo PDF.",
+            text="Chọn tệp Excel để nhập dữ liệu hoặc nhập trực tiếp, kiểm tra rồi tạo PDF.",
             wraplength=270,
             justify="left",
             font=ctk.CTkFont(size=14),
             text_color=("gray30", "gray70"),
         ).grid(row=2, column=0, sticky="w", padx=24, pady=(4, 16))
 
-        # --- NHÓM 1 (TRÊN CÙNG): FILE EXCEL -> IMPORT -> TẠO PDF ---
+        # --- CARD 1: KHỔ GIẤY IN (A4 / LETTER) ---
+        self.card_paper = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray90", "gray18"))
+        self.card_paper.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 12))
+        self.card_paper.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(self.card_paper, text="📄 Khổ giấy in", font=ctk.CTkFont(size=14, weight="bold")).grid(
+            row=0, column=0, sticky="w", padx=16, pady=(12, 6)
+        )
+        self.paper_size_seg = ctk.CTkSegmentedButton(
+            self.card_paper,
+            values=["A4 (6 tem)", "Letter (4 tem)"],
+            command=self._on_paper_size_changed,
+            height=38,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            selected_color="#10B981",
+            selected_hover_color="#059669",
+        )
+        self.paper_size_seg.grid(row=1, column=0, sticky="ew", padx=16, pady=(0, 4))
+        initial_val = "Letter (4 tem)" if self.app_state.paper_size_var.get() == "Letter" else "A4 (6 tem)"
+        self.paper_size_seg.set(initial_val)
+
+        ctk.CTkLabel(
+            self.card_paper,
+            text="A4: 6 tem (2×3) · Letter: 4 tem (2×2)",
+            font=ctk.CTkFont(size=11),
+            text_color=("gray50", "gray50"),
+        ).grid(row=2, column=0, sticky="w", padx=18, pady=(0, 12))
+
+        # --- CARD 2: DỮ LIỆU & XUẤT BẢN ---
+        self.card_data = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray90", "gray18"))
+        self.card_data.grid(row=4, column=0, sticky="ew", padx=16, pady=(0, 12))
+        self.card_data.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(self.card_data, text="📦 Dữ liệu & Tạo PDF", font=ctk.CTkFont(size=14, weight="bold")).grid(
+            row=0, column=0, sticky="w", padx=16, pady=(12, 6)
+        )
+
         self.excel_frame, self.excel_entry, self.excel_browse_btn = self._path_field(
-            3, 4, "File Excel (nếu import)", self.app_state.excel_var, self.controller.pick_excel_file
+            self.card_data, 1, 2, "Tệp Excel (nếu nhập)", self.app_state.excel_var, self.controller.pick_excel_file
         )
 
         self.excel_import_button = ctk.CTkButton(
-            self, text="Import từ Excel",
+            self.card_data, text="Nhập từ Excel",
             command=self.controller.import_from_excel,
             height=40,
             fg_color=("gray85", "gray25"),
             text_color=("gray10", "gray90"),
             hover_color=("gray75", "gray35")
         )
-        self.excel_import_button.grid(row=5, column=0, sticky="ew", padx=24, pady=(10, 6))
+        self.excel_import_button.grid(row=3, column=0, sticky="ew", padx=16, pady=(8, 6))
 
         self.generate_button = ctk.CTkButton(
-            self,
+            self.card_data,
             text="Tạo PDF",
             height=48,
             font=ctk.CTkFont(size=16, weight="bold"),
@@ -58,11 +94,11 @@ class SidebarPanel(ctk.CTkScrollableFrame):
             hover_color="#059669",
             text_color="white"
         )
-        self.generate_button.grid(row=6, column=0, sticky="ew", padx=24, pady=(6, 4))
+        self.generate_button.grid(row=4, column=0, sticky="ew", padx=16, pady=(6, 4))
 
         # Viền đậm + chữ đậm để người dùng nhận ra nút mở PDF
         self.open_pdf_button = ctk.CTkButton(
-            self, text="Mở PDF vừa tạo",
+            self.card_data, text="Mở PDF vừa tạo",
             command=self.controller.open_generated_pdf,
             fg_color="transparent",
             border_width=2,
@@ -72,33 +108,53 @@ class SidebarPanel(ctk.CTkScrollableFrame):
             height=36,
             font=ctk.CTkFont(size=12, weight="bold")
         )
-        self.open_pdf_button.grid(row=7, column=0, sticky="ew", padx=24, pady=(0, 16))
+        self.open_pdf_button.grid(row=5, column=0, sticky="ew", padx=16, pady=(0, 14))
 
-        # --- NHÓM 2: CẤU HÌNH ĐẦU RA ---
+        # --- CARD 3: CẤU HÌNH ĐẦU RA ---
+        self.card_output = ctk.CTkFrame(self, corner_radius=10, fg_color=("gray90", "gray18"))
+        self.card_output.grid(row=5, column=0, sticky="ew", padx=16, pady=(0, 16))
+        self.card_output.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(self.card_output, text="⚙️ Cấu hình đầu ra", font=ctk.CTkFont(size=14, weight="bold")).grid(
+            row=0, column=0, sticky="w", padx=16, pady=(12, 6)
+        )
+
         self.template_frame, self.template_entry, self.template_browse_btn = self._path_field(
-            8, 9, "File PDF mẫu", self.app_state.template_var, self.controller.pick_template_pdf
+            self.card_output, 1, 2, "Tệp PDF mẫu", self.app_state.template_var, self.controller.pick_template_pdf
         )
         self.output_dir_frame, self.output_dir_entry, self.output_dir_browse_btn = self._path_field(
-            10, 11, "Thư mục đầu ra", self.app_state.output_dir_var, self.controller.pick_output_dir
+            self.card_output, 3, 4, "Thư mục đầu ra", self.app_state.output_dir_var, self.controller.pick_output_dir
         )
 
-        ctk.CTkLabel(self, text="Tên file đầu ra (tùy chọn)", font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=12, column=0, sticky="w", padx=24, pady=(16, 8)
+        ctk.CTkLabel(self.card_output, text="Tên tệp đầu ra (tùy chọn)", font=ctk.CTkFont(size=13, weight="bold")).grid(
+            row=5, column=0, sticky="w", padx=16, pady=(12, 4)
         )
-        self.output_name_entry = ctk.CTkEntry(self, textvariable=self.app_state.output_name_var, height=40, font=ctk.CTkFont(size=14))
-        self.output_name_entry.grid(row=13, column=0, sticky="ew", padx=24, pady=(0, 24))
+        self.output_name_entry = ctk.CTkEntry(self.card_output, textvariable=self.app_state.output_name_var, height=38, font=ctk.CTkFont(size=13))
+        self.output_name_entry.grid(row=6, column=0, sticky="ew", padx=16, pady=(0, 14))
 
-    def _path_field(self, label_row: int, field_row: int, label: str, variable: ctk.StringVar, command) -> tuple[ctk.CTkFrame, ctk.CTkEntry, ctk.CTkButton]:
-        ctk.CTkLabel(self, text=label, font=ctk.CTkFont(size=14, weight="bold")).grid(
-            row=label_row, column=0, sticky="w", padx=24, pady=(16, 8)
+    def _on_paper_size_changed(self, value: str) -> None:
+        target_size = "Letter" if "letter" in value.lower() else "A4"
+        self.controller.on_paper_size_changed(target_size)
+
+    def sync_paper_size_ui(self) -> None:
+        curr = self.app_state.paper_size_var.get()
+        val = "Letter (4 tem)" if curr == "Letter" else "A4 (6 tem)"
+        if hasattr(self, "paper_size_seg"):
+            self.paper_size_seg.set(val)
+
+    def _path_field(
+        self, parent: ctk.CTkFrame, label_row: int, field_row: int, label: str, variable: ctk.StringVar, command
+    ) -> tuple[ctk.CTkFrame, ctk.CTkEntry, ctk.CTkButton]:
+        ctk.CTkLabel(parent, text=label, font=ctk.CTkFont(size=13, weight="bold")).grid(
+            row=label_row, column=0, sticky="w", padx=16, pady=(8, 4)
         )
-        field_row_frame = ctk.CTkFrame(self, fg_color="transparent")
-        field_row_frame.grid(row=field_row, column=0, sticky="ew", padx=24)
+        field_row_frame = ctk.CTkFrame(parent, fg_color="transparent")
+        field_row_frame.grid(row=field_row, column=0, sticky="ew", padx=16)
         field_row_frame.grid_columnconfigure(0, weight=1)
-        entry = ctk.CTkEntry(field_row_frame, textvariable=variable, height=40, font=ctk.CTkFont(size=13))
-        entry.grid(row=0, column=0, sticky="ew", padx=(0, 12))
+        entry = ctk.CTkEntry(field_row_frame, textvariable=variable, height=38, font=ctk.CTkFont(size=13))
+        entry.grid(row=0, column=0, sticky="ew", padx=(0, 10))
         btn = ctk.CTkButton(
-            field_row_frame, text="Chọn", width=80, height=40, command=command,
+            field_row_frame, text="Chọn", width=75, height=38, command=command,
             fg_color=("gray80", "gray30"), text_color=("black", "white"), hover_color=("gray70", "gray40")
         )
         btn.grid(row=0, column=1)
@@ -110,7 +166,7 @@ class SidebarPanel(ctk.CTkScrollableFrame):
     # --- TUTORIAL ACCESSOR METHODS ---
 
     def get_excel_import_widget(self) -> Optional[ctk.CTkButton]:
-        """Returns the 'Import từ Excel' button widget for tutorial spotlight."""
+        """Returns the 'Nhập từ Excel' button widget for tutorial spotlight."""
         return getattr(self, "excel_import_button", None)
 
     def get_excel_path_widget(self) -> Optional[ctk.CTkEntry]:
@@ -128,6 +184,10 @@ class SidebarPanel(ctk.CTkScrollableFrame):
     def get_open_pdf_widget(self) -> Optional[ctk.CTkButton]:
         """Returns the 'Mở PDF vừa tạo' button widget."""
         return getattr(self, "open_pdf_button", None)
+
+    def get_paper_size_widget(self) -> Optional[ctk.CTkSegmentedButton]:
+        """Returns the paper size segmented button widget."""
+        return getattr(self, "paper_size_seg", None)
 
     # --- COMPATIBILITY PROPERTY ALIASES ---
 
@@ -150,3 +210,7 @@ class SidebarPanel(ctk.CTkScrollableFrame):
     @property
     def btn_open_pdf(self) -> Optional[ctk.CTkButton]:
         return self.get_open_pdf_widget()
+
+    @property
+    def paper_size_btn(self) -> Optional[ctk.CTkSegmentedButton]:
+        return self.get_paper_size_widget()

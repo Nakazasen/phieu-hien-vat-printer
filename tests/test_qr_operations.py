@@ -332,6 +332,26 @@ def test_parse_qr_payload_122_character_legacy():
     assert parsed.box == "001/001"
 
 
+def test_parse_qr_payload_122_character_with_box_suffix():
+    # 122-char QR with trailing box suffix (e.g. user scanned code)
+    payload = (
+        "130618719200010+001    0000192000003V2ND25840 01            000004800000"
+        "                          "
+        "                 001/004"
+    )
+    assert len(payload) == 122
+    parsed = parse_qr_payload(payload)
+    assert parsed.po == "1306187192"
+    assert parsed.po_detail == "00010"
+    assert parsed.po_sub == "+001"
+    assert parsed.total_qty == "19200"
+    assert parsed.carton_qty == "4800"
+    assert parsed.item_code == "3V2ND25840"
+    assert parsed.rev == "01"
+    assert parsed.lot == ""
+    assert parsed.box == "001/004"
+
+
 def test_parse_qr_payload_scanner_crlf_and_lf():
     raw_129 = (
         "112608180100010+001    0000000800003W2ND25350 01            000000020000"
